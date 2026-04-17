@@ -1,0 +1,51 @@
+upstream:
+  repo: browser-use/video-use
+  branch: main
+
+mappings:
+  - name: docs
+    upstream_paths:
+      - README.md
+      - SKILL.md
+    codex_targets:
+      - README.md
+      - skills/codex-video-use/SKILL.md
+    strategy: adapt-language-and-workflow
+
+  - name: transcription
+    upstream_paths:
+      - helpers/transcribe.py
+      - helpers/transcribe_batch.py
+      - pyproject.toml
+    codex_targets:
+      - src/codex_video_use/transcription.py
+      - pyproject.toml
+    strategy: preserve-capability-not-text
+
+  - name: transcript-packing
+    upstream_paths:
+      - helpers/pack_transcripts.py
+    codex_targets:
+      - src/codex_video_use/packing.py
+    strategy: preserve-phrase-grouping-behavior
+
+  - name: timeline-view
+    upstream_paths:
+      - helpers/timeline_view.py
+      - static/timeline-view.svg
+    codex_targets:
+      - src/codex_video_use/timeline.py
+      - README.md
+    strategy: preserve-inspection-surface
+
+  - name: rendering
+    upstream_paths:
+      - helpers/render.py
+      - helpers/grade.py
+      - skills/manim-video/**
+    codex_targets:
+      - src/codex_video_use/rendering.py
+      - src/codex_video_use/grading.py
+      - skills/codex-video-use/SKILL.md
+    strategy: preserve-output-behavior
+

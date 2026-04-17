@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "codex-video-use"
+version = "0.1.0"
+description = "Codex-native video editing skill and toolkit."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=2.0",
+  "Pillow>=10.0",
+  "PyYAML>=6.0",
+  "requests>=2.32",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+]
+
+[project.scripts]
+codex-video-use-transcribe = "codex_video_use.cli:transcribe_main"
+codex-video-use-transcribe-batch = "codex_video_use.cli:transcribe_batch_main"
+codex-video-use-pack = "codex_video_use.cli:pack_main"
+codex-video-use-timeline-view = "codex_video_use.cli:timeline_main"
+codex-video-use-render = "codex_video_use.cli:render_main"
+codex-video-use-grade = "codex_video_use.cli:grade_main"
+codex-video-use-sync = "codex_video_use.cli:sync_main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+

@@ -1,0 +1,57 @@
+{
+  "engine": "elevenlabs-scribe",
+  "model": "scribe_v2",
+  "duration_seconds": 4.2,
+  "words": [
+    {
+      "text": "Hello",
+      "start": 0.0,
+      "end": 0.4,
+      "type": "word",
+      "speaker_id": "speaker_0"
+    },
+    {
+      "text": " ",
+      "start": 0.4,
+      "end": 0.5,
+      "type": "spacing",
+      "speaker_id": "speaker_0"
+    },
+    {
+      "text": "world",
+      "start": 0.5,
+      "end": 0.9,
+      "type": "word",
+      "speaker_id": "speaker_0"
+    },
+    {
+      "text": " ",
+      "start": 0.9,
+      "end": 1.7,
+      "type": "spacing",
+      "speaker_id": "speaker_0"
+    },
+    {
+      "text": "Next",
+      "start": 1.7,
+      "end": 2.0,
+      "type": "word",
+      "speaker_id": "speaker_1"
+    },
+    {
+      "text": " ",
+      "start": 2.0,
+      "end": 2.1,
+      "type": "spacing",
+      "speaker_id": "speaker_1"
+    },
+    {
+      "text": "line",
+      "start": 2.1,
+      "end": 2.4,
+      "type": "word",
+      "speaker_id": "speaker_1"
+    }
+  ]
+}
+

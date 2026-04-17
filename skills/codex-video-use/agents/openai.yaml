@@ -1,0 +1,4 @@
+interface:
+  display_name: "Codex Video Use"
+  short_description: "Edit source footage into a polished video"
+  default_prompt: "Use $codex-video-use to turn this footage into a polished edit with subtitles, previews, and verification passes."
