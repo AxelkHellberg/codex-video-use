@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -101,7 +102,7 @@ def record_result(state_path: Path, *, sha: str, result: str) -> dict[str, Any]:
 
 
 def validate(repo_root: Path) -> None:
-    run(["pytest"], cwd=repo_root)
+    run([sys.executable, "-m", "pytest"], cwd=repo_root)
 
 
 def build_sync_parser() -> argparse.ArgumentParser:
@@ -155,4 +156,3 @@ def run_sync_cli(args: argparse.Namespace) -> int:
         return 0
 
     raise SystemExit(f"unsupported sync command: {args.command}")
-
