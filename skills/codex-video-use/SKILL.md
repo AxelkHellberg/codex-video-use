@@ -24,6 +24,14 @@ Use this skill when the user wants a conversation-driven edit workflow over a fo
 - Apply subtitles after overlays in the final composite.
 - Reuse cached transcripts whenever the source file has not changed.
 
+## Setup
+
+Use `install.md` in the repo root for first-time setup or reconnects. On normal editing runs, do not repeat installation work unless something is missing. Just verify:
+
+- `ELEVENLABS_API_KEY` resolves from the environment or the repo `.env`.
+- `ffmpeg` and `ffprobe` are on `PATH`.
+- The repo package is installed so the `codex-video-use-*` CLIs are available.
+
 ## Typical workflow
 
 1. Inventory the source directory.
@@ -73,4 +81,3 @@ This repo includes a sync tool for upstream monitoring:
 - `codex-video-use-sync validate`
 
 Use it when the user asks to check for new upstream behavior, port changes, or prepare a sync commit.
-

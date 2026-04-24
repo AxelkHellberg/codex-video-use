@@ -7,8 +7,10 @@ mappings:
     upstream_paths:
       - README.md
       - SKILL.md
+      - install.md
     codex_targets:
       - README.md
+      - install.md
       - skills/codex-video-use/SKILL.md
     strategy: adapt-language-and-workflow
 
@@ -48,4 +50,3 @@ mappings:
       - src/codex_video_use/grading.py
       - skills/codex-video-use/SKILL.md
     strategy: preserve-output-behavior
-

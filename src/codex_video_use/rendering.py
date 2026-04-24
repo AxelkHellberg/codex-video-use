@@ -11,6 +11,21 @@ from .utils import CommandFailure, ensure_dir, load_json, run
 LOUDNORM_I = -14.0
 LOUDNORM_TP = -1.0
 LOUDNORM_LRA = 11.0
+SUBTITLE_FORCE_STYLE = (
+    "FontName=Helvetica,FontSize=18,Bold=1,"
+    "PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,"
+    "BorderStyle=1,Outline=2,Shadow=0,"
+    "Alignment=2,MarginV=90"
+)
+HDR_TRANSFERS = {"smpte2084", "arib-std-b67"}
+HDR_TONEMAP_FILTER = (
+    "zscale=t=linear:npl=100,"
+    "format=gbrpf32le,"
+    "zscale=p=bt709,"
+    "tonemap=tonemap=hable:desat=0,"
+    "zscale=t=bt709:m=bt709:r=tv,"
+    "format=yuv420p"
+)
 
 
 def _has_subtitles_filter() -> bool:
@@ -35,6 +50,46 @@ def _segment_list(edl: dict[str, Any]) -> list[dict[str, Any]]:
             for item in edl["ranges"]
         ]
     raise SystemExit("EDL must contain a 'segments' or 'ranges' list")
+
+
+
+
+def _source_color_transfer(source_path: Path) -> str:
+    result = run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=color_transfer",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            str(source_path),
+        ],
+        capture_output=True,
+        check=False,
+        quiet=True,
+    )
+    if result.returncode != 0:
+        return ""
+    return (result.stdout or "").strip()
+
+
+def _needs_hdr_tonemap(source_path: Path) -> bool:
+    return _source_color_transfer(source_path) in HDR_TRANSFERS
+
+
+def _video_filters(source_path: Path, *, preview: bool, grade: str | None) -> str:
+    vf_parts = []
+    if _needs_hdr_tonemap(source_path):
+        vf_parts.append(HDR_TONEMAP_FILTER)
+    vf_parts.append("scale=1280:-2" if preview else "scale=1920:-2")
+    resolved_grade = resolve_filter(grade)
+    if resolved_grade:
+        vf_parts.append(resolved_grade)
+    return ",".join(vf_parts)
 
 
 def _source_map(edl: dict[str, Any], edit_dir: Path) -> dict[str, Path]:
@@ -118,12 +173,7 @@ def extract_segment(
 ) -> Path:
     duration = end - start
     fade_out_start = max(0.0, duration - 0.03)
-    vf_parts = []
-    scale = "scale=1280:-2" if preview else "scale=1920:-2"
-    vf_parts.append(scale)
-    resolved_grade = resolve_filter(grade)
-    if resolved_grade:
-        vf_parts.append(resolved_grade)
+    vf = _video_filters(source_path, preview=preview, grade=grade)
     command = [
         "ffmpeg",
         "-y",
@@ -134,7 +184,7 @@ def extract_segment(
         "-t",
         f"{duration:.3f}",
         "-vf",
-        ",".join(vf_parts),
+        vf,
         "-af",
         f"afade=t=in:st=0:d=0.03,afade=t=out:st={fade_out_start:.3f}:d=0.03",
         "-c:v",
@@ -318,7 +368,7 @@ def composite_output(
     if subtitles_path and subtitles_path.exists():
         escaped = str(subtitles_path.resolve()).replace(":", r"\:").replace("'", r"\'")
         filter_parts.append(
-            f"{current}subtitles=filename='{escaped}':force_style='FontName=Helvetica,FontSize=18,Bold=1,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=0,Alignment=2,MarginV=35'[vout]"
+            f"{current}subtitles=filename='{escaped}':force_style='{SUBTITLE_FORCE_STYLE}'[vout]"
         )
         video_label = "[vout]"
     elif overlays:

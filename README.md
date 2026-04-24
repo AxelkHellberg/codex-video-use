@@ -33,13 +33,27 @@ Optional:
 - `yt-dlp` if you want to pull reference footage
 - `manim` if you want custom motion graphics authored outside the default overlay flow
 
-## Install
+## Setup prompt
+
+Paste this into Codex on a fresh machine:
+
+```text
+Set up codex-video-use for me.
+
+Read install.md first. Use it to create the venv, install the package, verify ffmpeg and ffprobe, register the skill with Codex, and configure ELEVENLABS_API_KEY in the repo .env if it is missing. Do not transcribe any footage yet. When setup is done, tell me the toolkit is ready and wait for source media.
+```
+
+## Manual install
+
+If you prefer to set it up yourself:
 
 ```bash
-cd /Users/axelhellberg/Desktop/Axel/codex-video-use
+git clone https://github.com/AxelkHellberg/codex-video-use ~/Developer/codex-video-use
+cd ~/Developer/codex-video-use
 uv venv .venv
 uv pip install --python .venv/bin/python -e .
-ln -sfn "$(pwd)/skills/codex-video-use" ~/.codex/skills/codex-video-use
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
+ln -sfn "$(pwd)/skills/codex-video-use" "${CODEX_HOME:-$HOME/.codex}/skills/codex-video-use"
 ```
 
 Create `.env` from the example:
@@ -53,6 +67,8 @@ Then set:
 ```bash
 ELEVENLABS_API_KEY=...
 ```
+
+For a full first-time setup checklist, see [`install.md`](./install.md).
 
 ## Use from Codex
 
