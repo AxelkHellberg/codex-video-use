@@ -9,6 +9,7 @@ Use this guide for first-time setup or to reconnect the repo on a machine where 
 - `ffmpeg` and `ffprobe` on `PATH`.
 - A Codex skill symlink at `${CODEX_HOME:-$HOME/.codex}/skills/codex-video-use`.
 - `ELEVENLABS_API_KEY` available from the environment or the repo `.env`.
+- No global animation stack required up front. HyperFrames, Remotion, and Manim are added only when a session actually needs them.
 
 ## Setup contract
 
@@ -50,6 +51,8 @@ command -v ffprobe >/dev/null
 
 If either command is missing, install `ffmpeg` with the platform package manager before continuing.
 
+Node.js and `npm` are not part of the base install. Only check for them when a later session needs HyperFrames or Remotion. HyperFrames currently requires Node.js 22+.
+
 ### 4. Register the Codex skill
 
 ```bash
@@ -77,6 +80,8 @@ ffprobe -version | head -1
 
 If the package was installed into the active shell already, `codex-video-use-timeline-view --help` is also a valid verification.
 
+Do not install HyperFrames, Remotion, or Manim during this base verification pass. Those belong inside the specific `edit/animations/slot_<id>/` directory for the project that needs them.
+
 ## Handoff
 
 Once setup is complete, tell the user:
@@ -85,3 +90,4 @@ Once setup is complete, tell the user:
 - That they should open Codex inside their footage directory.
 - That a good first prompt is `Use $codex-video-use to inventory these takes and propose an edit strategy.`
 - That all generated outputs land in `<videos_dir>/edit/`.
+- That motion-graphics engines are optional and will be installed per animation slot if a project needs them.

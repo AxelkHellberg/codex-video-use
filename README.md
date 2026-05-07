@@ -31,7 +31,8 @@ It is designed around a simple idea:
 Optional:
 
 - `yt-dlp` if you want to pull reference footage
-- `manim` if you want custom motion graphics authored outside the default overlay flow
+- Node.js and `npm` if a project needs HyperFrames or Remotion overlays. HyperFrames currently needs Node.js 22+.
+- `hyperframes`, `remotion`, and `manim` only when a specific animation slot calls for them. Install those engines lazily inside the slot instead of during base setup.
 
 ## Setup prompt
 
@@ -67,6 +68,8 @@ Then set:
 ```bash
 ELEVENLABS_API_KEY=...
 ```
+
+If a later edit needs motion graphics, add the engine inside that job's `edit/animations/slot_<id>/` directory rather than at the repo root. Use HyperFrames for HTML/CSS/GSAP-driven overlays, Remotion when a React composition is the simpler fit, and Manim for formal diagrams or math-heavy animation.
 
 For a full first-time setup checklist, see [`install.md`](./install.md).
 

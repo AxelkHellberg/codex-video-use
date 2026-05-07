@@ -31,6 +31,7 @@ Use `install.md` in the repo root for first-time setup or reconnects. On normal 
 - `ELEVENLABS_API_KEY` resolves from the environment or the repo `.env`.
 - `ffmpeg` and `ffprobe` are on `PATH`.
 - The repo package is installed so the `codex-video-use-*` CLIs are available.
+- Node.js and `npm` only need to be present if the edit calls for a HyperFrames or Remotion animation slot. HyperFrames currently requires Node.js 22+.
 
 ## Typical workflow
 
@@ -72,6 +73,21 @@ Use this structure:
 - Use timeline images only for uncertainty, not as a constant scan mechanism.
 - When a user asks for subtitles, decide chunk size and tone from the edit style rather than using a single hardcoded look.
 - When motion graphics are requested, keep overlay timing synchronized with the spoken explanation and verify that captions remain visible.
+
+## Animation slots
+
+Choose the lightest engine that fits the job. Do not assume a single motion stack.
+
+- HyperFrames: use for HTML/CSS/GSAP compositions, UI motion, or web-style overlays that benefit from a browser-native authoring model. Initialize and render inside `edit/animations/slot_<id>/`, and run the HyperFrames checks that make sense for the slot before using the output.
+- Remotion: use when the overlay is easiest to build as a React composition or when the user explicitly wants Remotion. Keep the whole Remotion project inside the slot directory instead of installing it at the repo root.
+- Manim: use for diagrammatic or math-heavy motion. Read the vendored Manim skill before authoring the slot.
+- PIL plus ffmpeg: use for simple cards, counters, reveals, or image-sequence overlays when a full animation framework would be unnecessary.
+
+For every animation slot:
+
+- Keep all scaffolding, source files, and renders under `<videos_dir>/edit/animations/slot_<id>/`.
+- Install or scaffold the chosen engine inside that slot on first use. Do not turn the repo root into a shared animation workspace.
+- Verify the rendered overlay with the engine's own checks when available, then confirm duration and dimensions with `ffprobe` before wiring it into `edl.json`.
 
 ## Sync workflow
 
