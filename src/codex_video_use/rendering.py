@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from .grading import resolve_filter
-from .utils import CommandFailure, ensure_dir, load_json, run
+from .utils import CommandFailure, ensure_dir, ffprobe_json, load_json, run
 
 
 LOUDNORM_I = -14.0
@@ -52,6 +52,26 @@ def _segment_list(edl: dict[str, Any]) -> list[dict[str, Any]]:
     raise SystemExit("EDL must contain a 'segments' or 'ranges' list")
 
 
+def _target_canvas(source_path: Path, *, preview: bool) -> tuple[int, int]:
+    probe = ffprobe_json(source_path)
+    video_stream = next(
+        (stream for stream in probe.get("streams", []) if stream.get("codec_type") == "video"),
+        {},
+    )
+    width = int(video_stream.get("width") or 0)
+    height = int(video_stream.get("height") or 0)
+    portrait = height > width
+    if preview:
+        return (720, 1280) if portrait else (1280, 720)
+    return (1080, 1920) if portrait else (1920, 1080)
+
+
+def _fit_filter(source_path: Path, *, preview: bool) -> str:
+    target_width, target_height = _target_canvas(source_path, preview=preview)
+    return (
+        f"scale={target_width}:{target_height}:force_original_aspect_ratio=decrease,"
+        f"pad={target_width}:{target_height}:(ow-iw)/2:(oh-ih)/2"
+    )
 
 
 def _source_color_transfer(source_path: Path) -> str:
@@ -85,7 +105,7 @@ def _video_filters(source_path: Path, *, preview: bool, grade: str | None) -> st
     vf_parts = []
     if _needs_hdr_tonemap(source_path):
         vf_parts.append(HDR_TONEMAP_FILTER)
-    vf_parts.append("scale=1280:-2" if preview else "scale=1920:-2")
+    vf_parts.append(_fit_filter(source_path, preview=preview))
     resolved_grade = resolve_filter(grade)
     if resolved_grade:
         vf_parts.append(resolved_grade)

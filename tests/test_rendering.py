@@ -24,12 +24,50 @@ def test_source_color_transfer_reads_ffprobe(monkeypatch) -> None:
 def test_video_filters_tonemap_hdr_sources(monkeypatch) -> None:
     monkeypatch.setattr(rendering, "_needs_hdr_tonemap", lambda _: True)
     monkeypatch.setattr(rendering, "resolve_filter", lambda _grade: "eq=saturation=1.05")
+    monkeypatch.setattr(
+        rendering,
+        "ffprobe_json",
+        lambda _: {"streams": [{"codec_type": "video", "width": 1920, "height": 1080}]},
+    )
 
     vf = rendering._video_filters(Path("/tmp/clip.mp4"), preview=True, grade="neutral")
 
     assert vf.startswith(rendering.HDR_TONEMAP_FILTER)
-    assert "scale=1280:-2" in vf
+    assert "scale=1280:720:force_original_aspect_ratio=decrease" in vf
+    assert "pad=1280:720:(ow-iw)/2:(oh-ih)/2" in vf
+    assert "eq=saturation=1.05" in vf
     assert vf.endswith("eq=saturation=1.05")
+
+
+def test_fit_filter_uses_vertical_canvas_for_portrait_sources(monkeypatch) -> None:
+    monkeypatch.setattr(
+        rendering,
+        "ffprobe_json",
+        lambda _: {"streams": [{"codec_type": "video", "width": 1080, "height": 1920}]},
+    )
+
+    preview_filter = rendering._fit_filter(Path("/tmp/portrait.mp4"), preview=True)
+    final_filter = rendering._fit_filter(Path("/tmp/portrait.mp4"), preview=False)
+
+    assert preview_filter == (
+        "scale=720:1280:force_original_aspect_ratio=decrease,"
+        "pad=720:1280:(ow-iw)/2:(oh-ih)/2"
+    )
+    assert final_filter == (
+        "scale=1080:1920:force_original_aspect_ratio=decrease,"
+        "pad=1080:1920:(ow-iw)/2:(oh-ih)/2"
+    )
+
+
+def test_fit_filter_defaults_to_landscape_when_probe_has_no_dimensions(monkeypatch) -> None:
+    monkeypatch.setattr(rendering, "ffprobe_json", lambda _: {"streams": [{"codec_type": "video"}]})
+
+    preview_filter = rendering._fit_filter(Path("/tmp/unknown.mp4"), preview=True)
+
+    assert preview_filter == (
+        "scale=1280:720:force_original_aspect_ratio=decrease,"
+        "pad=1280:720:(ow-iw)/2:(oh-ih)/2"
+    )
 
 
 def test_composite_output_uses_vertical_safe_subtitle_margin(tmp_path: Path, monkeypatch) -> None:
