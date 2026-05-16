@@ -17,6 +17,7 @@ Use this guide for first-time setup or to reconnect the repo on a machine where 
 - Ask the user only for the ElevenLabs API key or for permission to install missing system packages.
 - Do not start a transcription job as part of setup.
 - Finish with a lightweight real verification, not just file existence checks.
+- If Codex is running on a VPS or other remote host, install the toolkit there and keep the footage mounted on that same machine.
 
 ## Steps
 

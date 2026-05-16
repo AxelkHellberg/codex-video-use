@@ -32,6 +32,7 @@ Use `install.md` in the repo root for first-time setup or reconnects. On normal 
 - `ffmpeg` and `ffprobe` are on `PATH`.
 - The repo package is installed so the `codex-video-use-*` CLIs are available.
 - Node.js and `npm` only need to be present if the edit calls for a HyperFrames or Remotion animation slot. HyperFrames currently requires Node.js 22+.
+- If the session is running on a VPS or other persistent remote host, make sure the footage is accessible on that host before planning or rendering.
 
 ## Typical workflow
 

@@ -82,6 +82,8 @@ cd /path/to/my-footage
 codex
 ```
 
+The same workflow also works from a long-lived Codex host on a VPS or remote workstation. Keep the footage directory, this repo checkout, and the `ffmpeg` toolchain on that machine so renders stay local to the session.
+
 Example prompts:
 
 - `Use $codex-video-use to cut these takes into a 30 second launch edit.`
