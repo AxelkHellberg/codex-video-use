@@ -2,6 +2,8 @@
 
 `codex-video-use` is a Codex-native video editing skill and toolkit for turning a folder of source footage into a polished edit with subtitles, timing-aware cuts, optional overlays, and verification passes.
 
+Run it either from Codex on your local machine or from a long-lived Codex host on a VPS or remote workstation. Keep the footage, this repo checkout, and the `ffmpeg` toolchain on the machine that will do the render.
+
 It is designed around a simple idea:
 
 - transcribe the footage with word timestamps
