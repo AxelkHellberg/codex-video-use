@@ -27,6 +27,7 @@ def transcribe_main() -> int:
         api_key=api_key,
         language=args.language,
         num_speakers=args.num_speakers,
+        audio_track=args.audio_track,
     )
     return 0
 
@@ -39,6 +40,7 @@ def transcribe_batch_main() -> int:
         language=args.language,
         num_speakers=args.num_speakers,
         workers=args.workers,
+        audio_track=args.audio_track,
     )
     return 0
 
@@ -72,6 +74,7 @@ def render_main() -> int:
         build_subtitles_flag=args.build_subtitles,
         no_subtitles=args.no_subtitles,
         no_normalize=args.no_normalize,
+        fps=args.fps,
     )
     return 0
 

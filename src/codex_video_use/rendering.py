@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import json
+import re
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -52,14 +55,63 @@ def _segment_list(edl: dict[str, Any]) -> list[dict[str, Any]]:
     raise SystemExit("EDL must contain a 'segments' or 'ranges' list")
 
 
-def _target_canvas(source_path: Path, *, preview: bool) -> tuple[int, int]:
-    probe = ffprobe_json(source_path)
-    video_stream = next(
-        (stream for stream in probe.get("streams", []) if stream.get("codec_type") == "video"),
-        {},
+def _probe_primary_video_stream(source_path: Path, *, show_entries: str) -> dict[str, Any]:
+    result = run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            show_entries,
+            "-of",
+            "json",
+            str(source_path),
+        ],
+        capture_output=True,
+        check=False,
+        quiet=True,
     )
-    width = int(video_stream.get("width") or 0)
-    height = int(video_stream.get("height") or 0)
+    if result.returncode != 0:
+        return {}
+    try:
+        payload = json.loads(result.stdout or "{}")
+    except json.JSONDecodeError:
+        return {}
+    streams = payload.get("streams") or []
+    if not streams:
+        return {}
+    return streams[0]
+
+
+def _display_dimensions(source_path: Path) -> tuple[int, int]:
+    stream = _probe_primary_video_stream(
+        source_path,
+        show_entries="stream=width,height:stream_side_data=rotation",
+    )
+    try:
+        width = int(stream.get("width") or 0)
+        height = int(stream.get("height") or 0)
+    except (TypeError, ValueError):
+        return (0, 0)
+
+    rotation = 0.0
+    for side_data in stream.get("side_data_list") or []:
+        if side_data.get("rotation") is not None:
+            try:
+                rotation = float(side_data["rotation"])
+            except (TypeError, ValueError):
+                rotation = 0.0
+            break
+
+    if int(round(rotation)) % 360 in (90, 270):
+        return (height, width)
+    return (width, height)
+
+
+def _target_canvas(source_path: Path, *, preview: bool) -> tuple[int, int]:
+    width, height = _display_dimensions(source_path)
     portrait = height > width
     if preview:
         return (720, 1280) if portrait else (1280, 720)
@@ -99,6 +151,42 @@ def _source_color_transfer(source_path: Path) -> str:
 
 def _needs_hdr_tonemap(source_path: Path) -> bool:
     return _source_color_transfer(source_path) in HDR_TRANSFERS
+
+
+def _parse_fps_arg(value: str) -> str:
+    text = value.strip()
+    if len(text) > 32 or not re.fullmatch(r"(?:[0-9]+(?:\.[0-9]+)?|[0-9]+/[0-9]+)", text):
+        raise argparse.ArgumentTypeError(
+            "FPS must be a positive number or rational, for example 30 or 30000/1001"
+        )
+    try:
+        rate = Fraction(text)
+    except (ValueError, ZeroDivisionError) as exc:
+        raise argparse.ArgumentTypeError(
+            "FPS must be a positive number or rational, for example 30 or 30000/1001"
+        ) from exc
+    if rate <= 0:
+        raise argparse.ArgumentTypeError("FPS must be greater than zero")
+    limit = 2_147_483_647
+    if rate.numerator > limit or rate.denominator > limit:
+        raise argparse.ArgumentTypeError("FPS precision or magnitude is too large")
+    return f"{rate.numerator}/{rate.denominator}"
+
+
+def _probe_source_fps(source_path: Path) -> str | None:
+    stream = _probe_primary_video_stream(
+        source_path,
+        show_entries="stream=avg_frame_rate,r_frame_rate",
+    )
+    for field in ("avg_frame_rate", "r_frame_rate"):
+        value = stream.get(field)
+        if not value or value == "0/0":
+            continue
+        try:
+            return _parse_fps_arg(str(value))
+        except argparse.ArgumentTypeError:
+            continue
+    return None
 
 
 def _video_filters(source_path: Path, *, preview: bool, grade: str | None) -> str:
@@ -190,10 +278,12 @@ def extract_segment(
     grade: str | None,
     output_path: Path,
     preview: bool,
+    output_fps: str | None = None,
 ) -> Path:
     duration = end - start
     fade_out_start = max(0.0, duration - 0.03)
     vf = _video_filters(source_path, preview=preview, grade=grade)
+    resolved_fps = output_fps or _probe_source_fps(source_path) or "24"
     command = [
         "ffmpeg",
         "-y",
@@ -216,7 +306,7 @@ def extract_segment(
         "-pix_fmt",
         "yuv420p",
         "-r",
-        "24",
+        resolved_fps,
         "-c:a",
         "aac",
         "-b:a",
@@ -433,6 +523,7 @@ def render_edl(
     build_subtitles_flag: bool = False,
     no_subtitles: bool = False,
     no_normalize: bool = False,
+    fps: str | None = None,
 ) -> Path:
     edl_path = edl_path.resolve()
     edit_dir = edl_path.parent
@@ -440,6 +531,7 @@ def render_edl(
     edl = load_json(edl_path)
     source_paths = _source_map(edl, edit_dir)
     segments = _segment_list(edl)
+    output_fps = fps or (_probe_source_fps(source_paths[segments[0]["source"]]) if segments else None) or "24"
     clips_dir = ensure_dir(edit_dir / ("clips-preview" if preview else "clips"))
     rendered_segments = []
     for index, segment in enumerate(segments):
@@ -453,6 +545,7 @@ def render_edl(
                 grade=segment.get("grade") or edl.get("grade"),
                 output_path=clip_path,
                 preview=preview,
+                output_fps=output_fps,
             )
         )
 
@@ -485,4 +578,5 @@ def build_render_parser() -> argparse.ArgumentParser:
     parser.add_argument("--build-subtitles", action="store_true")
     parser.add_argument("--no-subtitles", action="store_true")
     parser.add_argument("--no-normalize", action="store_true")
+    parser.add_argument("--fps", type=_parse_fps_arg, default=None)
     return parser

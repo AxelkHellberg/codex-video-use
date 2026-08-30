@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import argparse
+import array
+import math
 import mimetypes
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
+import wave
 
 import requests
 
-from .utils import ensure_dir, load_env_value, media_duration, now_iso, write_json
+from .utils import ensure_dir, load_env_value, media_duration, now_iso, run, write_json
 
 
 TRANSCRIBE_URL = "https://api.elevenlabs.io/v1/speech-to-text"
@@ -34,11 +38,19 @@ def resolve_api_key(search_root: Path | None = None) -> str:
     return value
 
 
-def transcript_path(edit_dir: Path, source: Path) -> Path:
-    return ensure_dir(edit_dir / "transcripts") / f"{source.stem}.json"
+def _non_negative_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("value must be greater than or equal to zero")
+    return parsed
 
 
-def transcript_is_current(output_path: Path, source: Path) -> bool:
+def transcript_path(edit_dir: Path, source: Path, audio_track: int = 0) -> Path:
+    suffix = "" if audio_track == 0 else f".track{audio_track}"
+    return ensure_dir(edit_dir / "transcripts") / f"{source.stem}{suffix}.json"
+
+
+def transcript_is_current(output_path: Path, source: Path, *, audio_track: int = 0) -> bool:
     if not output_path.exists():
         return False
     try:
@@ -57,7 +69,64 @@ def transcript_is_current(output_path: Path, source: Path) -> bool:
         data.get("source_path") == str(source.resolve())
         and data.get("source_size") == source.stat().st_size
         and data.get("source_mtime_ns") == source.stat().st_mtime_ns
+        and int(data.get("source_audio_track", 0)) == audio_track
     )
+
+
+def count_audio_tracks(source: Path) -> int:
+    result = run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "a",
+            "-show_entries",
+            "stream=index",
+            "-of",
+            "csv=p=0",
+            str(source),
+        ],
+        capture_output=True,
+        check=False,
+        quiet=True,
+    )
+    if result.returncode != 0:
+        return 0
+    return len([line for line in (result.stdout or "").splitlines() if line.strip()])
+
+
+def extract_audio_track(source: Path, *, audio_track: int, output_path: Path) -> None:
+    run(
+        [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(source),
+            "-map",
+            f"0:a:{audio_track}",
+            "-vn",
+            "-ac",
+            "1",
+            "-ar",
+            "16000",
+            "-c:a",
+            "pcm_s16le",
+            str(output_path),
+        ],
+        quiet=True,
+    )
+
+
+def peak_dbfs(wav_path: Path) -> float:
+    peak = 0
+    with wave.open(str(wav_path), "rb") as handle:
+        while frames := handle.readframes(1 << 16):
+            samples = array.array("h")
+            samples.frombytes(frames)
+            if samples:
+                peak = max(peak, max(abs(sample) for sample in samples))
+    return 20 * math.log10(peak / 32768) if peak > 0 else float("-inf")
 
 
 def request_transcript(
@@ -92,7 +161,7 @@ def request_transcript(
     return response.json()
 
 
-def normalize_transcript(source: Path, payload: dict[str, Any]) -> dict[str, Any]:
+def normalize_transcript(source: Path, payload: dict[str, Any], *, audio_track: int) -> dict[str, Any]:
     if "transcripts" in payload:
         raise RuntimeError("multichannel transcripts are not supported in this workflow")
     words = payload.get("words", [])
@@ -103,6 +172,7 @@ def normalize_transcript(source: Path, payload: dict[str, Any]) -> dict[str, Any
         "source_path": str(source.resolve()),
         "source_size": source.stat().st_size,
         "source_mtime_ns": source.stat().st_mtime_ns,
+        "source_audio_track": audio_track,
         "duration_seconds": media_duration(source),
         "language_code": payload.get("language_code"),
         "language_probability": payload.get("language_probability"),
@@ -119,19 +189,44 @@ def transcribe_one(
     api_key: str,
     language: str | None = None,
     num_speakers: int | None = None,
+    audio_track: int = 0,
 ) -> Path:
     source = source.resolve()
-    output_path = transcript_path(edit_dir, source)
-    if transcript_is_current(output_path, source):
+    track_count = count_audio_tracks(source)
+    if track_count == 0:
+        raise RuntimeError(f"no audio streams found in {source}")
+    if audio_track >= track_count:
+        raise RuntimeError(
+            f"{source.name} only has {track_count} audio track(s); cannot select track {audio_track}"
+        )
+
+    output_path = transcript_path(edit_dir, source, audio_track=audio_track)
+    if transcript_is_current(output_path, source, audio_track=audio_track):
         print(f"cached: {output_path.name}")
         return output_path
-    payload = request_transcript(
-        source,
-        api_key=api_key,
-        language=language,
-        num_speakers=num_speakers,
-    )
-    normalized = normalize_transcript(source, payload)
+
+    if track_count > 1:
+        print(f"using audio track {audio_track + 1} of {track_count} for {source.name}")
+
+    with TemporaryDirectory() as temp_dir:
+        extracted_audio = Path(temp_dir) / f"{source.stem}.track{audio_track}.wav"
+        extract_audio_track(source, audio_track=audio_track, output_path=extracted_audio)
+
+        if peak_dbfs(extracted_audio) < -60.0:
+            other_tracks = ", ".join(str(index) for index in range(track_count) if index != audio_track)
+            hint = f" Try --audio-track {other_tracks}." if other_tracks else ""
+            raise RuntimeError(
+                f"selected audio track {audio_track} for {source.name} is effectively silent; not uploading.{hint}"
+            )
+
+        payload = request_transcript(
+            extracted_audio,
+            api_key=api_key,
+            language=language,
+            num_speakers=num_speakers,
+        )
+
+    normalized = normalize_transcript(source, payload, audio_track=audio_track)
     write_json(output_path, normalized)
     print(f"saved: {output_path}")
     return output_path
@@ -152,6 +247,7 @@ def transcribe_batch(
     language: str | None = None,
     num_speakers: int | None = None,
     workers: int = 4,
+    audio_track: int = 0,
 ) -> list[Path]:
     directory = directory.resolve()
     targets = discover_media(directory)
@@ -169,6 +265,7 @@ def transcribe_batch(
                 api_key=api_key,
                 language=language,
                 num_speakers=num_speakers,
+                audio_track=audio_track,
             ): target
             for target in targets
         }
@@ -183,6 +280,7 @@ def build_transcribe_parser() -> argparse.ArgumentParser:
     parser.add_argument("--edit-dir", type=Path, default=None)
     parser.add_argument("--language", type=str, default=None)
     parser.add_argument("--num-speakers", type=int, default=None)
+    parser.add_argument("--audio-track", type=_non_negative_int, default=0)
     return parser
 
 
@@ -193,4 +291,5 @@ def build_transcribe_batch_parser() -> argparse.ArgumentParser:
     parser.add_argument("--language", type=str, default=None)
     parser.add_argument("--num-speakers", type=int, default=None)
     parser.add_argument("--workers", type=int, default=4)
+    parser.add_argument("--audio-track", type=_non_negative_int, default=0)
     return parser
