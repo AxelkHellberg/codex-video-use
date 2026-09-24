@@ -47,7 +47,7 @@ Use `install.md` in the repo root for first-time setup or reconnects. On normal 
 6. Use `codex-video-use-timeline-view` at ambiguous cut points.
 7. Render preview:
    - `codex-video-use-render <edl.json> -o <videos_dir>/edit/preview.mp4 --preview --build-subtitles`
-8. Self-check the preview around cut boundaries and revise if needed.
+8. Self-check the preview around cut boundaries and revise if needed. Measure integrated loudness and true peak with ffmpeg; check dialogue, music-only, and end-card sections independently when they exist. For a publish-ready launch, promo, or ad, use a fresh critic pass that ranks concrete issues with timecodes and proposes the first fixes.
 9. Render final:
    - `codex-video-use-render <edl.json> -o <videos_dir>/edit/final.mp4 --build-subtitles`
 
@@ -72,7 +72,7 @@ Use this structure:
 - Use transcript phrases to identify strong beats before comparing visuals.
 - Prefer silence gaps and natural phrase endings as cut candidates.
 - Use timeline images only for uncertainty, not as a constant scan mechanism.
-- When a user asks for subtitles, decide chunk size and tone from the edit style rather than using a single hardcoded look.
+- When a user asks for subtitles, decide chunk size and tone from the edit style rather than using a single hardcoded look. The built-in short-form treatment targets about two words, breaks at punctuation or pauses of 0.3 seconds or more, and may use three fast words so captions do not blink past unreadably.
 - When motion graphics are requested, keep overlay timing synchronized with the spoken explanation and verify that captions remain visible.
 
 ## Animation slots
@@ -89,6 +89,11 @@ For every animation slot:
 - Keep all scaffolding, source files, and renders under `<videos_dir>/edit/animations/slot_<id>/`.
 - Install or scaffold the chosen engine inside that slot on first use. Do not turn the repo root into a shared animation workspace.
 - Verify the rendered overlay with the engine's own checks when available, then confirm duration and dimensions with `ffprobe` before wiring it into `edl.json`.
+- When an overlay relies on a web font, wait for it and assert that the expected font face is available before rendering; fallback fonts can otherwise ship unnoticed. For PIL overlays, use an explicit font file rather than the default font.
+
+## Music and sound effects
+
+When the edit calls for music or effects, use them sparingly and tie each effect to a visible event. Align the audible attack with the intended frame, duck music beneath spoken dialogue, and fade beds before an end-card sting. Normalize the finished mix to -14 LUFS with a true-peak ceiling of -1 dBTP, then report measured values rather than claiming to have listened.
 
 ## Sync workflow
 

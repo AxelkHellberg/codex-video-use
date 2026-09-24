@@ -29,6 +29,10 @@ HDR_TONEMAP_FILTER = (
     "zscale=t=bt709:m=bt709:r=tv,"
     "format=yuv420p"
 )
+CAPTION_TARGET_WORDS = 2
+CAPTION_MAX_WORDS = 3
+CAPTION_MIN_DURATION = 0.35
+CAPTION_PAUSE_BREAK = 0.3
 
 
 def _has_subtitles_filter() -> bool:
@@ -208,19 +212,51 @@ def _source_map(edl: dict[str, Any], edit_dir: Path) -> dict[str, Path]:
     return mapping
 
 
-def _chunk_words(words: list[dict[str, Any]], chunk_size: int = 2) -> list[list[dict[str, Any]]]:
+def _chunk_words(words: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+    """Create readable, short caption phrases from timestamped transcript words."""
+    usable_words = [
+        word
+        for word in words
+        if word.get("type") == "word" and str(word.get("text") or "").strip()
+    ]
     chunks: list[list[dict[str, Any]]] = []
     current: list[dict[str, Any]] = []
-    for word in words:
-        if word.get("type") != "word":
-            continue
+    for index, word in enumerate(usable_words):
         current.append(word)
-        if len(current) >= chunk_size or str(word.get("text", "")).strip().endswith((".", "!", "?")):
+        next_word = usable_words[index + 1] if index + 1 < len(usable_words) else None
+        pause = (
+            float(next_word.get("start", 0.0)) - float(word.get("end", 0.0))
+            if next_word
+            else 0.0
+        )
+        duration = float(word.get("end", 0.0)) - float(current[0].get("start", 0.0))
+        text = str(word.get("text") or "").strip()
+        if (
+            next_word is None
+            or text.endswith((".", "!", "?", ",", ";", ":"))
+            or pause >= CAPTION_PAUSE_BREAK
+            or len(current) >= CAPTION_MAX_WORDS
+            or (len(current) >= CAPTION_TARGET_WORDS and duration >= CAPTION_MIN_DURATION)
+        ):
             chunks.append(current)
             current = []
-    if current:
-        chunks.append(current)
     return chunks
+
+
+def _resolve_subtitles_path(value: str, edit_dir: Path) -> Path:
+    """Find an explicit subtitle file or stop before a render silently loses captions."""
+    requested = Path(value)
+    candidates = [requested if requested.is_absolute() else (edit_dir / requested).resolve()]
+    if not requested.is_absolute():
+        candidates.append(requested.resolve())
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    attempted = ", ".join(str(candidate) for candidate in candidates)
+    raise SystemExit(
+        f"subtitles file in EDL was not found (tried {attempted}). "
+        "Correct the path or use --no-subtitles."
+    )
 
 
 def _srt_time(seconds: float) -> str:
@@ -557,8 +593,7 @@ def render_edl(
         if build_subtitles_flag:
             subtitles_path = build_master_srt(edl, edit_dir, edit_dir / "master.srt")
         elif "subtitles" in edl:
-            candidate = Path(edl["subtitles"])
-            subtitles_path = candidate if candidate.is_absolute() else (edit_dir / candidate).resolve()
+            subtitles_path = _resolve_subtitles_path(str(edl["subtitles"]), edit_dir)
 
     overlays = list(edl.get("overlays") or [])
     prenorm_path = output_path if no_normalize else output_path.with_suffix(".prenorm.mp4")
