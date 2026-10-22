@@ -141,6 +141,10 @@ codex-video-use-sync scan --json
 codex-video-use-sync validate
 ```
 
+When publishing a sync, prepare and commit the validated upstream checkpoint with
+the adaptations before pushing. See [the sync publishing procedure](sync/README.md)
+for the command sequence and for recording reviewed changes that do not apply here.
+
 ## Repository layout
 
 ```text

@@ -101,6 +101,22 @@ def record_result(state_path: Path, *, sha: str, result: str) -> dict[str, Any]:
     return state
 
 
+def record_checkpoint(state_path: Path, *, sha: str, note: str) -> dict[str, Any]:
+    """Prepare a reviewed, validated upstream checkpoint for the sync commit.
+
+    This records local validation, not a successful push. Commit this file with
+    the adapted files so a fresh clone does not repeat already reviewed changes.
+    """
+    state = read_state(state_path)
+    state["last_checked_sha"] = sha
+    state["last_synced_sha"] = sha
+    state["last_result"] = "validated"
+    state["last_run_at"] = now_iso()
+    state["last_review_note"] = note
+    write_state(state_path, state)
+    return state
+
+
 def validate(repo_root: Path) -> None:
     run([sys.executable, "-m", "pytest"], cwd=repo_root)
 
@@ -117,6 +133,11 @@ def build_sync_parser() -> argparse.ArgumentParser:
 
     validate_parser = subparsers.add_parser("validate")
     validate_parser.add_argument("--json", action="store_true")
+
+    checkpoint_parser = subparsers.add_parser("checkpoint")
+    checkpoint_parser.add_argument("--sha", required=True)
+    checkpoint_parser.add_argument("--note", required=True)
+    checkpoint_parser.add_argument("--json", action="store_true")
 
     record_parser = subparsers.add_parser("record")
     record_parser.add_argument("--sha", required=True)
@@ -153,6 +174,14 @@ def run_sync_cli(args: argparse.Namespace) -> int:
             print(json.dumps(payload, indent=2))
         else:
             print(f"recorded {args.result} for {args.sha}")
+        return 0
+
+    if args.command == "checkpoint":
+        payload = record_checkpoint(state_path, sha=args.sha, note=args.note)
+        if args.json:
+            print(json.dumps(payload, indent=2))
+        else:
+            print(f"prepared validated checkpoint for {args.sha}; commit it before pushing")
         return 0
 
     raise SystemExit(f"unsupported sync command: {args.command}")
