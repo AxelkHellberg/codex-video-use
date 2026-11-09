@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import tempfile
 import wave
 from pathlib import Path
@@ -164,6 +165,10 @@ def render_timeline_image(
     transcript_path: Path | None = None,
     frame_count: int = 10,
 ) -> Path:
+    if not math.isfinite(start) or not math.isfinite(end) or start < 0 or end <= start:
+        raise ValueError("timeline range must be finite and satisfy 0 <= start < end")
+    if isinstance(frame_count, bool) or not isinstance(frame_count, int) or frame_count < 1:
+        raise ValueError("frame_count must be a positive integer")
     with tempfile.TemporaryDirectory() as temp_dir_name:
         temp_dir = Path(temp_dir_name)
         frame_paths = _extract_frames(video, start, end, frame_count, temp_dir)
