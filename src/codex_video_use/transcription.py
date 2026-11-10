@@ -55,7 +55,7 @@ def transcript_is_current(output_path: Path, source: Path, *, audio_track: int =
         return False
     try:
         payload = output_path.read_text(encoding="utf-8")
-    except OSError:
+    except (OSError, UnicodeError):
         return False
     if not payload:
         return False
@@ -65,11 +65,20 @@ def transcript_is_current(output_path: Path, source: Path, *, audio_track: int =
         data = json.loads(payload)
     except json.JSONDecodeError:
         return False
+    if not isinstance(data, dict):
+        return False
+    cached_track = data.get("source_audio_track", 0)
+    if isinstance(cached_track, bool) or not isinstance(cached_track, (int, str)):
+        return False
+    try:
+        cached_track = int(cached_track)
+    except ValueError:
+        return False
     return (
         data.get("source_path") == str(source.resolve())
         and data.get("source_size") == source.stat().st_size
         and data.get("source_mtime_ns") == source.stat().st_mtime_ns
-        and int(data.get("source_audio_track", 0)) == audio_track
+        and cached_track == audio_track
     )
 
 
