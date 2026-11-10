@@ -42,7 +42,9 @@ def _extract_frames(video: Path, start: float, end: float, frame_count: int, tem
     if frame_count <= 1:
         moments = [(start + end) / 2.0]
     else:
-        step = (end - start) / (frame_count - 1)
+        # The interval ends just after its last frame; seeking to end can
+        # succeed without writing an image when end is the media duration.
+        step = (end - start) / frame_count
         moments = [start + (index * step) for index in range(frame_count)]
     outputs = []
     for index, moment in enumerate(moments):
