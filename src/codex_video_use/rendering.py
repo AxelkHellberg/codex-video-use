@@ -234,6 +234,7 @@ def _chunk_words(words: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
         if (
             next_word is None
             or text.endswith((".", "!", "?", ",", ";", ":"))
+            or (next_word is not None and word.get("speaker_id") != next_word.get("speaker_id"))
             or pause >= CAPTION_PAUSE_BREAK
             or len(current) >= CAPTION_MAX_WORDS
             or (len(current) >= CAPTION_TARGET_WORDS and duration >= CAPTION_MIN_DURATION)
