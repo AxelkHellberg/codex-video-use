@@ -253,6 +253,17 @@ def transcribe_batch(
     targets = discover_media(directory)
     if not targets:
         raise SystemExit(f"no supported media files found in {directory}")
+    # Transcripts use the source stem, so different extensions can otherwise
+    # race to write the same file after both have incurred transcription cost.
+    by_stem: dict[str, Path] = {}
+    for target in targets:
+        previous = by_stem.get(target.stem)
+        if previous is not None:
+            raise ValueError(
+                f"transcript output collision: {previous.name} and {target.name}; "
+                "rename one source before transcribing this batch"
+            )
+        by_stem[target.stem] = target
     resolved_edit_dir = (edit_dir or (directory / "edit")).resolve()
     api_key = resolve_api_key(directory)
     outputs: list[Path] = []
