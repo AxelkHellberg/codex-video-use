@@ -512,9 +512,18 @@ def composite_output(
         current = next_label
 
     if subtitles_path and subtitles_path.exists():
-        escaped = str(subtitles_path.resolve()).replace(":", r"\:").replace("'", r"\'")
+        # FFmpeg parses filter option values and then the surrounding graph.
+        # Escape each layer separately; argv is passed directly, without a shell.
+        escaped = "".join(
+            "\\" + char if char in "\\':" or char.isspace() else char
+            for char in str(subtitles_path.resolve())
+        )
+        escaped = "".join(
+            "\\" + char if char in "\\'[],;" or char.isspace() else char
+            for char in escaped
+        )
         filter_parts.append(
-            f"{current}subtitles=filename='{escaped}':force_style='{SUBTITLE_FORCE_STYLE}'[vout]"
+            f"{current}subtitles=filename={escaped}:force_style='{SUBTITLE_FORCE_STYLE}'[vout]"
         )
         video_label = "[vout]"
     elif overlays:
