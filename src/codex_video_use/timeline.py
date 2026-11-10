@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from .utils import load_json, run
+from .utils import ffprobe_json, load_json, run
 
 
 BG = (18, 18, 24)
@@ -70,6 +70,9 @@ def _extract_frames(video: Path, start: float, end: float, frame_count: int, tem
 
 
 def _extract_waveform(video: Path, start: float, end: float, samples: int = 1400) -> np.ndarray:
+    streams = ffprobe_json(video).get("streams", [])
+    if not any(stream.get("codec_type") == "audio" for stream in streams):
+        return np.zeros(samples)
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as handle:
         wav_path = Path(handle.name)
     try:
