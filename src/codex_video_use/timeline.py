@@ -99,13 +99,16 @@ def _extract_waveform(video: Path, start: float, end: float, samples: int = 1400
         pcm = np.frombuffer(frames, dtype=np.int16).astype(np.float32) / 32768.0
         if pcm.size == 0:
             return np.zeros(samples)
-        bucket = max(1, pcm.size // samples)
-        usable = (pcm.size // bucket) * bucket
-        rms = np.sqrt(np.mean(np.square(pcm[:usable].reshape(-1, bucket)), axis=1))
-        if rms.size < samples:
-            rms = np.pad(rms, (0, samples - rms.size))
-        else:
-            rms = rms[:samples]
+        # Partition the entire interval; truncating fixed-size buckets drops
+        # the tail and places late audio at the wrong point on the timeline.
+        edges = np.linspace(0, pcm.size, samples + 1, dtype=np.int64)
+        energy = np.concatenate(([0.0], np.cumsum(np.square(pcm), dtype=np.float64)))
+        counts = np.diff(edges)
+        mean_square = np.divide(
+            np.diff(energy[edges]), counts,
+            out=np.zeros(samples), where=counts > 0,
+        )
+        rms = np.sqrt(mean_square)
         peak = float(rms.max()) if rms.size else 0.0
         return rms / peak if peak > 0 else rms
     finally:
