@@ -50,7 +50,10 @@ def transcript_path(edit_dir: Path, source: Path, audio_track: int = 0) -> Path:
     return ensure_dir(edit_dir / "transcripts") / f"{source.stem}{suffix}.json"
 
 
-def transcript_is_current(output_path: Path, source: Path, *, audio_track: int = 0) -> bool:
+def transcript_is_current(
+    output_path: Path, source: Path, *, audio_track: int = 0,
+    language: str | None = None, num_speakers: int | None = None,
+) -> bool:
     if not output_path.exists():
         return False
     try:
@@ -70,6 +73,8 @@ def transcript_is_current(output_path: Path, source: Path, *, audio_track: int =
         and data.get("source_size") == source.stat().st_size
         and data.get("source_mtime_ns") == source.stat().st_mtime_ns
         and int(data.get("source_audio_track", 0)) == audio_track
+        and data.get("request_language") == (language or None)
+        and data.get("request_num_speakers") == (num_speakers or None)
     )
 
 
@@ -161,7 +166,10 @@ def request_transcript(
     return response.json()
 
 
-def normalize_transcript(source: Path, payload: dict[str, Any], *, audio_track: int) -> dict[str, Any]:
+def normalize_transcript(
+    source: Path, payload: dict[str, Any], *, audio_track: int,
+    language: str | None = None, num_speakers: int | None = None,
+) -> dict[str, Any]:
     if "transcripts" in payload:
         raise RuntimeError("multichannel transcripts are not supported in this workflow")
     words = payload.get("words", [])
@@ -173,6 +181,8 @@ def normalize_transcript(source: Path, payload: dict[str, Any], *, audio_track: 
         "source_size": source.stat().st_size,
         "source_mtime_ns": source.stat().st_mtime_ns,
         "source_audio_track": audio_track,
+        "request_language": language or None,
+        "request_num_speakers": num_speakers or None,
         "duration_seconds": media_duration(source),
         "language_code": payload.get("language_code"),
         "language_probability": payload.get("language_probability"),
@@ -201,7 +211,9 @@ def transcribe_one(
         )
 
     output_path = transcript_path(edit_dir, source, audio_track=audio_track)
-    if transcript_is_current(output_path, source, audio_track=audio_track):
+    if transcript_is_current(
+        output_path, source, audio_track=audio_track, language=language, num_speakers=num_speakers,
+    ):
         print(f"cached: {output_path.name}")
         return output_path
 
@@ -226,7 +238,9 @@ def transcribe_one(
             num_speakers=num_speakers,
         )
 
-    normalized = normalize_transcript(source, payload, audio_track=audio_track)
+    normalized = normalize_transcript(
+        source, payload, audio_track=audio_track, language=language, num_speakers=num_speakers,
+    )
     write_json(output_path, normalized)
     print(f"saved: {output_path}")
     return output_path
