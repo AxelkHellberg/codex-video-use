@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 from fractions import Fraction
 from pathlib import Path
@@ -57,6 +58,28 @@ def _segment_list(edl: dict[str, Any]) -> list[dict[str, Any]]:
             for item in edl["ranges"]
         ]
     raise SystemExit("EDL must contain a 'segments' or 'ranges' list")
+
+
+def _validate_render_segments(segments: list[dict[str, Any]], sources: dict[str, Path]) -> None:
+    if not segments:
+        raise SystemExit("EDL must contain at least one segment")
+    for index, segment in enumerate(segments, start=1):
+        prefix = f"EDL segment {index}"
+        if (
+            not isinstance(segment, dict)
+            or not isinstance(segment.get("source"), str)
+            or segment["source"] not in sources
+        ):
+            raise SystemExit(f"{prefix} must reference a known source")
+        try:
+            start, end = segment["start"], segment["end"]
+            if isinstance(start, bool) or isinstance(end, bool):
+                raise ValueError
+            start, end = float(start), float(end)
+        except (KeyError, TypeError, ValueError, OverflowError):
+            raise SystemExit(f"{prefix} requires finite start/end times with 0 <= start < end") from None
+        if not math.isfinite(start) or not math.isfinite(end) or start < 0 or end <= start:
+            raise SystemExit(f"{prefix} requires finite start/end times with 0 <= start < end")
 
 
 def _probe_primary_video_stream(source_path: Path, *, show_entries: str) -> dict[str, Any]:
@@ -563,10 +586,11 @@ def render_edl(
 ) -> Path:
     edl_path = edl_path.resolve()
     edit_dir = edl_path.parent
-    ensure_dir(output_path.resolve().parent)
     edl = load_json(edl_path)
     source_paths = _source_map(edl, edit_dir)
     segments = _segment_list(edl)
+    _validate_render_segments(segments, source_paths)
+    ensure_dir(output_path.resolve().parent)
     output_fps = fps or (_probe_source_fps(source_paths[segments[0]["source"]]) if segments else None) or "24"
     clips_dir = ensure_dir(edit_dir / ("clips-preview" if preview else "clips"))
     rendered_segments = []
