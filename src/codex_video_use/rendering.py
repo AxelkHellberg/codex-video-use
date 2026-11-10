@@ -356,8 +356,16 @@ def extract_segment(
 
 
 def concat_segments(segment_paths: list[Path], output_path: Path, edit_dir: Path) -> Path:
+    entries = []
+    for path in segment_paths:
+        filename = str(path.resolve())
+        if "\n" in filename or "\r" in filename:
+            raise ValueError("concat paths must not contain a line break")
+        # FFmpeg's concat syntax needs a literal quote outside the quoted part.
+        escaped = filename.replace("'", "'\\''")
+        entries.append(f"file '{escaped}'\n")
     list_path = edit_dir / "_concat.txt"
-    list_path.write_text("".join(f"file '{path.resolve()}'\n" for path in segment_paths), encoding="utf-8")
+    list_path.write_text("".join(entries), encoding="utf-8")
     run(
         [
             "ffmpeg",
