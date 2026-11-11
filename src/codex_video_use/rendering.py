@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 from fractions import Fraction
 from pathlib import Path
@@ -435,7 +436,18 @@ def normalize_audio(input_path: Path, output_path: Path, *, preview: bool) -> Pa
         )
         return output_path
     measurement = _measure_loudnorm(input_path)
-    if not measurement:
+    if measurement and measurement.get("input_i") == "-inf" and measurement.get("input_tp") == "-inf":
+        # There is no signal to normalize. Some FFmpeg versions also produce
+        # NaNs for silent input in single-pass mode, so preserve both streams.
+        run(["ffmpeg", "-y", "-i", str(input_path), "-c", "copy", str(output_path)], quiet=True)
+        return output_path
+    fields = ("input_i", "input_tp", "input_lra", "input_thresh", "target_offset")
+    try:
+        usable = bool(measurement) and all(math.isfinite(float(measurement[field])) for field in fields)
+    except (KeyError, TypeError, ValueError, OverflowError):
+        usable = False
+    # Missing or non-finite measurements cannot be passed as measured_* options.
+    if not usable:
         return normalize_audio(input_path, output_path, preview=True)
     run(
         [
