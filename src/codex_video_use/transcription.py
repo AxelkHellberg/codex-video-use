@@ -182,6 +182,20 @@ def normalize_transcript(source: Path, payload: dict[str, Any], *, audio_track: 
     }
 
 
+def _source_signature(source: Path) -> tuple[int, int, int, int, int]:
+    stat = source.stat()
+    return (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
+
+
+def _check_source_unchanged(source: Path, signature: tuple[int, int, int, int, int]) -> None:
+    try:
+        if _source_signature(source) == signature:
+            return
+    except OSError as exc:
+        raise RuntimeError(f"source changed during transcription: {source}; transcript not saved") from exc
+    raise RuntimeError(f"source changed during transcription: {source}; transcript not saved")
+
+
 def transcribe_one(
     source: Path,
     *,
@@ -200,6 +214,7 @@ def transcribe_one(
             f"{source.name} only has {track_count} audio track(s); cannot select track {audio_track}"
         )
 
+    signature = _source_signature(source)
     output_path = transcript_path(edit_dir, source, audio_track=audio_track)
     if transcript_is_current(output_path, source, audio_track=audio_track):
         print(f"cached: {output_path.name}")
@@ -211,6 +226,7 @@ def transcribe_one(
     with TemporaryDirectory() as temp_dir:
         extracted_audio = Path(temp_dir) / f"{source.stem}.track{audio_track}.wav"
         extract_audio_track(source, audio_track=audio_track, output_path=extracted_audio)
+        _check_source_unchanged(source, signature)
 
         if peak_dbfs(extracted_audio) < -60.0:
             other_tracks = ", ".join(str(index) for index in range(track_count) if index != audio_track)
@@ -226,7 +242,9 @@ def transcribe_one(
             num_speakers=num_speakers,
         )
 
+    _check_source_unchanged(source, signature)
     normalized = normalize_transcript(source, payload, audio_track=audio_track)
+    _check_source_unchanged(source, signature)
     write_json(output_path, normalized)
     print(f"saved: {output_path}")
     return output_path
