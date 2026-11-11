@@ -45,6 +45,20 @@ def _non_negative_int(value: str) -> int:
     return parsed
 
 
+def _positive_int(value: str) -> int:
+    parsed = int(value)
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("value must be greater than zero")
+    return parsed
+
+
+def _validate_options(audio_track: int, num_speakers: int | None) -> None:
+    if type(audio_track) is not int or audio_track < 0:
+        raise ValueError("audio_track must be a non-negative integer")
+    if num_speakers is not None and (type(num_speakers) is not int or num_speakers <= 0):
+        raise ValueError("num_speakers must be a positive integer when provided")
+
+
 def transcript_path(edit_dir: Path, source: Path, audio_track: int = 0) -> Path:
     suffix = "" if audio_track == 0 else f".track{audio_track}"
     return ensure_dir(edit_dir / "transcripts") / f"{source.stem}{suffix}.json"
@@ -191,6 +205,7 @@ def transcribe_one(
     num_speakers: int | None = None,
     audio_track: int = 0,
 ) -> Path:
+    _validate_options(audio_track, num_speakers)
     source = source.resolve()
     track_count = count_audio_tracks(source)
     if track_count == 0:
@@ -249,6 +264,7 @@ def transcribe_batch(
     workers: int = 4,
     audio_track: int = 0,
 ) -> list[Path]:
+    _validate_options(audio_track, num_speakers)
     directory = directory.resolve()
     targets = discover_media(directory)
     if not targets:
@@ -279,7 +295,7 @@ def build_transcribe_parser() -> argparse.ArgumentParser:
     parser.add_argument("source", type=Path)
     parser.add_argument("--edit-dir", type=Path, default=None)
     parser.add_argument("--language", type=str, default=None)
-    parser.add_argument("--num-speakers", type=int, default=None)
+    parser.add_argument("--num-speakers", type=_positive_int, default=None)
     parser.add_argument("--audio-track", type=_non_negative_int, default=0)
     return parser
 
@@ -289,7 +305,7 @@ def build_transcribe_batch_parser() -> argparse.ArgumentParser:
     parser.add_argument("directory", type=Path)
     parser.add_argument("--edit-dir", type=Path, default=None)
     parser.add_argument("--language", type=str, default=None)
-    parser.add_argument("--num-speakers", type=int, default=None)
+    parser.add_argument("--num-speakers", type=_positive_int, default=None)
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--audio-track", type=_non_negative_int, default=0)
     return parser
