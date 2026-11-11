@@ -31,7 +31,8 @@ def test_video_filters_tonemap_hdr_sources(monkeypatch) -> None:
     vf = rendering._video_filters(Path("/tmp/clip.mp4"), preview=True, grade="neutral")
 
     assert vf.startswith(rendering.HDR_TONEMAP_FILTER)
-    assert "scale=1280:720:force_original_aspect_ratio=decrease" in vf
+    assert "min(1280,720*dar)" in vf
+    assert "setsar=1" in vf
     assert "pad=1280:720:(ow-iw)/2:(oh-ih)/2" in vf
     assert "eq=saturation=1.05" in vf
     assert vf.endswith("eq=saturation=1.05")
@@ -44,11 +45,13 @@ def test_fit_filter_uses_vertical_canvas_for_portrait_sources(monkeypatch) -> No
     final_filter = rendering._fit_filter(Path("/tmp/portrait.mp4"), preview=False)
 
     assert preview_filter == (
-        "scale=720:1280:force_original_aspect_ratio=decrease,"
+        "scale=w='max(2,trunc(min(720,1280*dar)/2)*2)':"
+        "h='max(2,trunc(min(1280,720/dar)/2)*2)',setsar=1,"
         "pad=720:1280:(ow-iw)/2:(oh-ih)/2"
     )
     assert final_filter == (
-        "scale=1080:1920:force_original_aspect_ratio=decrease,"
+        "scale=w='max(2,trunc(min(1080,1920*dar)/2)*2)':"
+        "h='max(2,trunc(min(1920,1080/dar)/2)*2)',setsar=1,"
         "pad=1080:1920:(ow-iw)/2:(oh-ih)/2"
     )
 
@@ -59,7 +62,8 @@ def test_fit_filter_defaults_to_landscape_when_probe_has_no_dimensions(monkeypat
     preview_filter = rendering._fit_filter(Path("/tmp/unknown.mp4"), preview=True)
 
     assert preview_filter == (
-        "scale=1280:720:force_original_aspect_ratio=decrease,"
+        "scale=w='max(2,trunc(min(1280,720*dar)/2)*2)':"
+        "h='max(2,trunc(min(720,1280/dar)/2)*2)',setsar=1,"
         "pad=1280:720:(ow-iw)/2:(oh-ih)/2"
     )
 
