@@ -320,6 +320,7 @@ def extract_segment(
     fade_out_start = max(0.0, duration - 0.03)
     vf = _video_filters(source_path, preview=preview, grade=grade)
     resolved_fps = output_fps or _probe_source_fps(source_path) or "24"
+    has_audio = any(stream.get("codec_type") == "audio" for stream in ffprobe_json(source_path).get("streams", []))
     command = [
         "ffmpeg",
         "-y",
@@ -327,6 +328,12 @@ def extract_segment(
         f"{start:.3f}",
         "-i",
         str(source_path),
+    ]
+    if not has_audio:
+        command += ["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo"]
+    command += [
+        "-map", "0:v:0",
+        "-map", "0:a:0" if has_audio else "1:a:0",
         "-t",
         f"{duration:.3f}",
         "-vf",
@@ -345,6 +352,8 @@ def extract_segment(
         resolved_fps,
         "-c:a",
         "aac",
+        "-ac",
+        "2",
         "-b:a",
         "192k",
         "-ar",
