@@ -49,7 +49,7 @@ def apply_grade(input_path: Path, output_path: Path, *, filter_string: str) -> P
 
 def build_grade_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Apply a grading filter or preset to a clip.")
-    parser.add_argument("input_path", type=Path)
+    parser.add_argument("input_path", type=Path, nargs="?", help="clip to grade (not needed for --list-presets)")
     parser.add_argument("-o", "--output", type=Path, required=False, default=None)
     parser.add_argument("--filter", type=str, default="neutral")
     parser.add_argument("--list-presets", action="store_true")

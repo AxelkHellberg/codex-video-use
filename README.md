@@ -127,6 +127,18 @@ Build a decision image:
 codex-video-use-timeline-view /path/to/my-footage/clip.mp4 12.0 18.0 -o /path/to/my-footage/edit/verify/cut-01.png
 ```
 
+List grading presets without opening a media file:
+
+```bash
+codex-video-use-grade --list-presets
+```
+
+Apply one to a clip:
+
+```bash
+codex-video-use-grade clip.mp4 --filter cinematic-warm -o clip.graded.mp4
+```
+
 Render from an EDL:
 
 ```bash
