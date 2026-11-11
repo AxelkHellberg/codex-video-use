@@ -80,11 +80,14 @@ def render_main() -> int:
 
 
 def grade_main() -> int:
-    args = build_grade_parser().parse_args()
+    parser = build_grade_parser()
+    args = parser.parse_args()
     if args.list_presets:
         for name, value in GRADE_PRESETS.items():
             print(f"{name}: {value}")
         return 0
+    if args.input_path is None:
+        parser.error("input_path is required unless --list-presets is used")
     output = args.output or args.input_path.with_name(f"{args.input_path.stem}.graded{args.input_path.suffix}")
     apply_grade(args.input_path.resolve(), output.resolve(), filter_string=args.filter)
     return 0
