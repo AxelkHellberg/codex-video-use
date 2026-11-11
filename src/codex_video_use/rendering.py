@@ -92,13 +92,20 @@ def _probe_primary_video_stream(source_path: Path, *, show_entries: str) -> dict
 def _display_dimensions(source_path: Path) -> tuple[int, int]:
     stream = _probe_primary_video_stream(
         source_path,
-        show_entries="stream=width,height:stream_side_data=rotation",
+        show_entries="stream=width,height,sample_aspect_ratio:stream_side_data=rotation",
     )
     try:
         width = int(stream.get("width") or 0)
         height = int(stream.get("height") or 0)
     except (TypeError, ValueError):
         return (0, 0)
+
+    try:
+        sar = Fraction(str(stream.get("sample_aspect_ratio") or "1:1").replace(":", "/"))
+        if sar > 0:
+            width = max(1, round(width * sar))
+    except (ValueError, ZeroDivisionError):
+        pass
 
     rotation = 0.0
     for side_data in stream.get("side_data_list") or []:
@@ -125,7 +132,9 @@ def _target_canvas(source_path: Path, *, preview: bool) -> tuple[int, int]:
 def _fit_filter(source_path: Path, *, preview: bool) -> str:
     target_width, target_height = _target_canvas(source_path, preview=preview)
     return (
-        f"scale={target_width}:{target_height}:force_original_aspect_ratio=decrease,"
+        f"scale=w='max(2,trunc(min({target_width},{target_height}*dar)/2)*2)':"
+        f"h='max(2,trunc(min({target_height},{target_width}/dar)/2)*2)',"
+        "setsar=1,"
         f"pad={target_width}:{target_height}:(ow-iw)/2:(oh-ih)/2"
     )
 
