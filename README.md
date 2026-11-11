@@ -134,6 +134,9 @@ codex-video-use-render /path/to/my-footage/edit/edl.json -o /path/to/my-footage/
 codex-video-use-render /path/to/my-footage/edit/edl.json -o /path/to/my-footage/edit/final.mp4 --build-subtitles
 ```
 
+The first segment determines the output orientation. All segments use that same
+canvas; footage with a different aspect ratio is fitted and padded to match.
+
 Scan upstream:
 
 ```bash

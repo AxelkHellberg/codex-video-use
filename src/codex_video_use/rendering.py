@@ -122,8 +122,8 @@ def _target_canvas(source_path: Path, *, preview: bool) -> tuple[int, int]:
     return (1080, 1920) if portrait else (1920, 1080)
 
 
-def _fit_filter(source_path: Path, *, preview: bool) -> str:
-    target_width, target_height = _target_canvas(source_path, preview=preview)
+def _fit_filter(source_path: Path, *, preview: bool, canvas_size: tuple[int, int] | None = None) -> str:
+    target_width, target_height = canvas_size or _target_canvas(source_path, preview=preview)
     return (
         f"scale={target_width}:{target_height}:force_original_aspect_ratio=decrease,"
         f"pad={target_width}:{target_height}:(ow-iw)/2:(oh-ih)/2"
@@ -193,11 +193,14 @@ def _probe_source_fps(source_path: Path) -> str | None:
     return None
 
 
-def _video_filters(source_path: Path, *, preview: bool, grade: str | None) -> str:
+def _video_filters(
+    source_path: Path, *, preview: bool, grade: str | None,
+    canvas_size: tuple[int, int] | None = None,
+) -> str:
     vf_parts = []
     if _needs_hdr_tonemap(source_path):
         vf_parts.append(HDR_TONEMAP_FILTER)
-    vf_parts.append(_fit_filter(source_path, preview=preview))
+    vf_parts.append(_fit_filter(source_path, preview=preview, canvas_size=canvas_size))
     resolved_grade = resolve_filter(grade)
     if resolved_grade:
         vf_parts.append(resolved_grade)
@@ -315,10 +318,11 @@ def extract_segment(
     output_path: Path,
     preview: bool,
     output_fps: str | None = None,
+    canvas_size: tuple[int, int] | None = None,
 ) -> Path:
     duration = end - start
     fade_out_start = max(0.0, duration - 0.03)
-    vf = _video_filters(source_path, preview=preview, grade=grade)
+    vf = _video_filters(source_path, preview=preview, grade=grade, canvas_size=canvas_size)
     resolved_fps = output_fps or _probe_source_fps(source_path) or "24"
     command = [
         "ffmpeg",
@@ -568,6 +572,8 @@ def render_edl(
     source_paths = _source_map(edl, edit_dir)
     segments = _segment_list(edl)
     output_fps = fps or (_probe_source_fps(source_paths[segments[0]["source"]]) if segments else None) or "24"
+    # Stream-copy concatenation requires one canvas for the entire edit.
+    canvas_size = _target_canvas(source_paths[segments[0]["source"]], preview=preview) if segments else None
     clips_dir = ensure_dir(edit_dir / ("clips-preview" if preview else "clips"))
     rendered_segments = []
     for index, segment in enumerate(segments):
@@ -582,6 +588,7 @@ def render_edl(
                 output_path=clip_path,
                 preview=preview,
                 output_fps=output_fps,
+                canvas_size=canvas_size,
             )
         )
 
