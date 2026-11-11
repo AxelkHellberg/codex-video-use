@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .grading import resolve_filter
-from .utils import CommandFailure, ensure_dir, ffprobe_json, load_json, run
+from .utils import CommandFailure, ensure_dir, ffprobe_json, load_json, media_duration, run
 
 
 LOUDNORM_I = -14.0
@@ -530,6 +530,9 @@ def composite_output(
             *inputs,
             "-filter_complex",
             ";".join(filter_parts),
+            # A longer overlay makes framesync repeat the base's final frame.
+            # Bound the composition without truncating it for a short overlay.
+            *(["-t", str(media_duration(base_path))] if overlays else []),
             "-map",
             video_label,
             "-map",
