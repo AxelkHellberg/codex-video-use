@@ -533,7 +533,7 @@ def composite_output(
             "-map",
             video_label,
             "-map",
-            "0:a",
+            "0:a?",
             "-c:v",
             "libx264",
             "-preset",
