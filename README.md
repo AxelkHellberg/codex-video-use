@@ -134,6 +134,10 @@ codex-video-use-render /path/to/my-footage/edit/edl.json -o /path/to/my-footage/
 codex-video-use-render /path/to/my-footage/edit/edl.json -o /path/to/my-footage/edit/final.mp4 --build-subtitles
 ```
 
+Each EDL overlay needs a nonempty `file`, a finite `start` at or after zero,
+and a finite positive `duration`. Invalid overlay timing is rejected before
+media processing or output creation. Numeric strings are accepted.
+
 Scan upstream:
 
 ```bash

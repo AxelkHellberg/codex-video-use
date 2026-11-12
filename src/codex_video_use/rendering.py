@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 from fractions import Fraction
 from pathlib import Path
@@ -473,6 +474,33 @@ def _overlay_expression(value: Any, fallback: str) -> str:
     return str(value)
 
 
+def _validated_overlays(value: Any) -> list[dict[str, Any]]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise SystemExit("EDL overlays must be a list")
+    validated = []
+    for index, overlay in enumerate(value, start=1):
+        message = f"overlay {index}: expected a file, nonnegative start and positive duration"
+        if not isinstance(overlay, dict):
+            raise SystemExit(message)
+        file = overlay.get("file")
+        if not isinstance(file, (str, Path)) or not str(file).strip():
+            raise SystemExit(message)
+        try:
+            if isinstance(overlay.get("start"), bool) or isinstance(overlay.get("duration"), bool):
+                raise ValueError()
+            start = float(overlay["start"])
+            duration = float(overlay["duration"])
+        except (KeyError, TypeError, ValueError, OverflowError) as exc:
+            raise SystemExit(message) from exc
+        if (not math.isfinite(start) or start < 0 or not math.isfinite(duration)
+                or duration <= 0 or not math.isfinite(start + duration)):
+            raise SystemExit(message)
+        validated.append({**overlay, "start": start, "duration": duration})
+    return validated
+
+
 def composite_output(
     base_path: Path,
     *,
@@ -481,6 +509,7 @@ def composite_output(
     output_path: Path,
     edit_dir: Path,
 ) -> Path:
+    overlays = _validated_overlays(overlays)
     if subtitles_path and subtitles_path.exists() and not _has_subtitles_filter():
         print("warning: ffmpeg subtitles filter is unavailable; skipping burned subtitles in this render")
         subtitles_path = None
@@ -563,8 +592,9 @@ def render_edl(
 ) -> Path:
     edl_path = edl_path.resolve()
     edit_dir = edl_path.parent
-    ensure_dir(output_path.resolve().parent)
     edl = load_json(edl_path)
+    overlays = _validated_overlays(edl.get("overlays"))
+    ensure_dir(output_path.resolve().parent)
     source_paths = _source_map(edl, edit_dir)
     segments = _segment_list(edl)
     output_fps = fps or (_probe_source_fps(source_paths[segments[0]["source"]]) if segments else None) or "24"
@@ -595,7 +625,6 @@ def render_edl(
         elif "subtitles" in edl:
             subtitles_path = _resolve_subtitles_path(str(edl["subtitles"]), edit_dir)
 
-    overlays = list(edl.get("overlays") or [])
     prenorm_path = output_path if no_normalize else output_path.with_suffix(".prenorm.mp4")
     composite_output(base_path, overlays=overlays, subtitles_path=subtitles_path, output_path=prenorm_path, edit_dir=edit_dir)
     if no_normalize:
