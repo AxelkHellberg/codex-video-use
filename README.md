@@ -28,6 +28,8 @@ It is designed around a simple idea:
 
 - Python 3.11+
 - `ffmpeg` and `ffprobe`
+- FFmpeg's `subtitles` filter (libass support) when burning captions. Requested
+  captions fail explicitly if it is unavailable; use `--no-subtitles` to opt out.
 - An ElevenLabs API key in `.env` or the environment as `ELEVENLABS_API_KEY`
 
 Optional:
