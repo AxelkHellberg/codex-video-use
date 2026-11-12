@@ -43,6 +43,14 @@ def _has_subtitles_filter() -> bool:
     return " subtitles " in result.stdout
 
 
+def _require_subtitles_filter() -> None:
+    if not _has_subtitles_filter():
+        raise SystemExit(
+            "ffmpeg subtitles filter is unavailable. Install FFmpeg with libass "
+            "support or use --no-subtitles to render without captions."
+        )
+
+
 def _segment_list(edl: dict[str, Any]) -> list[dict[str, Any]]:
     if "segments" in edl:
         return list(edl["segments"])
@@ -250,7 +258,7 @@ def _resolve_subtitles_path(value: str, edit_dir: Path) -> Path:
     if not requested.is_absolute():
         candidates.append(requested.resolve())
     for candidate in candidates:
-        if candidate.exists():
+        if candidate.is_file():
             return candidate
     attempted = ", ".join(str(candidate) for candidate in candidates)
     raise SystemExit(
@@ -481,9 +489,10 @@ def composite_output(
     output_path: Path,
     edit_dir: Path,
 ) -> Path:
-    if subtitles_path and subtitles_path.exists() and not _has_subtitles_filter():
-        print("warning: ffmpeg subtitles filter is unavailable; skipping burned subtitles in this render")
-        subtitles_path = None
+    if subtitles_path is not None:
+        if not subtitles_path.is_file():
+            raise SystemExit(f"subtitles file was not found: {subtitles_path}")
+        _require_subtitles_filter()
 
     if not overlays and not subtitles_path:
         run(["ffmpeg", "-y", "-i", str(base_path), "-c", "copy", str(output_path)], quiet=True)
@@ -563,8 +572,12 @@ def render_edl(
 ) -> Path:
     edl_path = edl_path.resolve()
     edit_dir = edl_path.parent
-    ensure_dir(output_path.resolve().parent)
     edl = load_json(edl_path)
+    if not no_subtitles and (build_subtitles_flag or "subtitles" in edl):
+        if not build_subtitles_flag:
+            _resolve_subtitles_path(str(edl["subtitles"]), edit_dir)
+        _require_subtitles_filter()
+    ensure_dir(output_path.resolve().parent)
     source_paths = _source_map(edl, edit_dir)
     segments = _segment_list(edl)
     output_fps = fps or (_probe_source_fps(source_paths[segments[0]["source"]]) if segments else None) or "24"
