@@ -127,6 +127,10 @@ Build a decision image:
 codex-video-use-timeline-view /path/to/my-footage/clip.mp4 12.0 18.0 -o /path/to/my-footage/edit/verify/cut-01.png
 ```
 
+The timeline range must fit within the video's duration. The first video
+stream's duration is used when available, with container duration as a fallback.
+Inputs without a video stream or a known finite positive duration are rejected.
+
 Render from an EDL:
 
 ```bash

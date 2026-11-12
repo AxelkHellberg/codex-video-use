@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import json
+import math
 import tempfile
 import wave
 from pathlib import Path
@@ -155,6 +157,26 @@ def _silence_windows(words: list[dict], start: float, end: float, threshold: flo
     return result
 
 
+def _timeline_video_duration(video: Path) -> float:
+    result = run(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+         "stream=duration:format=duration", "-of", "json", str(video)],
+        capture_output=True, quiet=True,
+    )
+    metadata = json.loads(result.stdout)
+    streams = metadata.get("streams") or []
+    if not streams:
+        raise ValueError("timeline input must contain a video stream")
+    for value in (streams[0].get("duration"), metadata.get("format", {}).get("duration")):
+        try:
+            duration = float(value)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(duration) and duration > 0:
+            return duration
+    raise ValueError("could not determine a finite positive video duration")
+
+
 def render_timeline_image(
     video: Path,
     start: float,
@@ -164,6 +186,13 @@ def render_timeline_image(
     transcript_path: Path | None = None,
     frame_count: int = 10,
 ) -> Path:
+    if not math.isfinite(start) or not math.isfinite(end) or start < 0 or end <= start:
+        raise ValueError("timeline range must be finite and satisfy 0 <= start < end")
+    if isinstance(frame_count, bool) or not isinstance(frame_count, int) or frame_count < 1:
+        raise ValueError("frame_count must be a positive integer")
+    duration = _timeline_video_duration(video)
+    if start >= duration or end > duration:
+        raise ValueError(f"timeline range exceeds video duration ({duration:g}s)")
     with tempfile.TemporaryDirectory() as temp_dir_name:
         temp_dir = Path(temp_dir_name)
         frame_paths = _extract_frames(video, start, end, frame_count, temp_dir)
