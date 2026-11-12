@@ -161,7 +161,33 @@ def request_transcript(
     return response.json()
 
 
+def _validate_transcript_response(payload: Any) -> None:
+    # Validate the timestamps consumed by packing, captions and timeline views
+    # before replacing a cache. Never include provider content in diagnostics.
+    if not isinstance(payload, dict):
+        raise RuntimeError("invalid transcription response: expected an object")
+    if not isinstance(payload.get("words"), list):
+        raise RuntimeError("invalid transcription response: expected a words list")
+    if "text" in payload and not isinstance(payload["text"], str):
+        raise RuntimeError("invalid transcription response: text must be a string")
+    for index, word in enumerate(payload["words"]):
+        if not isinstance(word, dict) or not isinstance(word.get("text"), str):
+            raise RuntimeError(f"invalid transcription response: word {index} requires text")
+        start, end = word.get("start"), word.get("end")
+        try:
+            valid = all(
+                isinstance(value, (int, float)) and not isinstance(value, bool)
+                and math.isfinite(value) and value >= 0
+                for value in (start, end)
+            ) and end >= start
+        except OverflowError:
+            valid = False
+        if not valid:
+            raise RuntimeError(f"invalid transcription response: word {index} has invalid timestamps")
+
+
 def normalize_transcript(source: Path, payload: dict[str, Any], *, audio_track: int) -> dict[str, Any]:
+    _validate_transcript_response(payload)
     if "transcripts" in payload:
         raise RuntimeError("multichannel transcripts are not supported in this workflow")
     words = payload.get("words", [])

@@ -71,7 +71,7 @@ def test_transcribe_one_records_selected_audio_track_metadata(tmp_path: Path, mo
 
     def fake_request(upload_path: Path, **_: object) -> dict[str, object]:
         captured_uploads.append(upload_path.name)
-        return {"text": "hello world", "words": [{"text": "hello", "type": "word"}]}
+        return {"text": "hello world", "words": [{"text": "hello", "type": "word", "start": 0.0, "end": 0.5}]}
 
     monkeypatch.setattr(transcription, "request_transcript", fake_request)
 
