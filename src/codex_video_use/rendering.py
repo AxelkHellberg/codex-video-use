@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
+import tempfile
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
@@ -568,40 +570,44 @@ def render_edl(
     source_paths = _source_map(edl, edit_dir)
     segments = _segment_list(edl)
     output_fps = fps or (_probe_source_fps(source_paths[segments[0]["source"]]) if segments else None) or "24"
-    clips_dir = ensure_dir(edit_dir / ("clips-preview" if preview else "clips"))
-    rendered_segments = []
-    for index, segment in enumerate(segments):
-        source = source_paths[segment["source"]]
-        clip_path = clips_dir / f"segment-{index:03d}.mp4"
-        rendered_segments.append(
-            extract_segment(
-                source,
-                start=float(segment["start"]),
-                end=float(segment["end"]),
-                grade=segment.get("grade") or edl.get("grade"),
-                output_path=clip_path,
-                preview=preview,
-                output_fps=output_fps,
+    with tempfile.TemporaryDirectory(prefix=".render-", dir=output_path.resolve().parent) as work_name:
+        work_dir = Path(work_name)
+        clips_dir = ensure_dir(work_dir / "clips")
+        rendered_segments = []
+        for index, segment in enumerate(segments):
+            source = source_paths[segment["source"]]
+            clip_path = clips_dir / f"segment-{index:03d}.mp4"
+            rendered_segments.append(
+                extract_segment(
+                    source,
+                    start=float(segment["start"]),
+                    end=float(segment["end"]),
+                    grade=segment.get("grade") or edl.get("grade"),
+                    output_path=clip_path,
+                    preview=preview,
+                    output_fps=output_fps,
+                )
             )
-        )
 
-    base_path = edit_dir / ("base-preview.mp4" if preview else "base.mp4")
-    concat_segments(rendered_segments, base_path, edit_dir)
+        base_path = work_dir / "base.mp4"
+        concat_segments(rendered_segments, base_path, work_dir)
 
-    subtitles_path: Path | None = None
-    if not no_subtitles:
-        if build_subtitles_flag:
-            subtitles_path = build_master_srt(edl, edit_dir, edit_dir / "master.srt")
-        elif "subtitles" in edl:
-            subtitles_path = _resolve_subtitles_path(str(edl["subtitles"]), edit_dir)
+        subtitles_path: Path | None = None
+        if not no_subtitles:
+            if build_subtitles_flag:
+                subtitles_path = build_master_srt(edl, edit_dir, edit_dir / "master.srt")
+            elif "subtitles" in edl:
+                subtitles_path = _resolve_subtitles_path(str(edl["subtitles"]), edit_dir)
 
-    overlays = list(edl.get("overlays") or [])
-    prenorm_path = output_path if no_normalize else output_path.with_suffix(".prenorm.mp4")
-    composite_output(base_path, overlays=overlays, subtitles_path=subtitles_path, output_path=prenorm_path, edit_dir=edit_dir)
-    if no_normalize:
-        return output_path
-    normalize_audio(prenorm_path, output_path, preview=preview)
-    prenorm_path.unlink(missing_ok=True)
+        overlays = list(edl.get("overlays") or [])
+        rendered_path = work_dir / f"rendered{output_path.suffix}"
+        prenorm_path = rendered_path if no_normalize else work_dir / "prenorm.mp4"
+        composite_output(base_path, overlays=overlays, subtitles_path=subtitles_path, output_path=prenorm_path, edit_dir=edit_dir)
+        if not no_normalize:
+            normalize_audio(prenorm_path, rendered_path, preview=preview)
+        # Scratch files share the output filesystem, so only a complete render
+        # replaces a previous export. Inputs and other renders never share scratch.
+        os.replace(rendered_path, output_path)
     return output_path
 
 
