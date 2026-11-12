@@ -169,8 +169,10 @@ def render_timeline_image(
         frame_paths = _extract_frames(video, start, end, frame_count, temp_dir)
         waveform = _extract_waveform(video, start, end)
         resolved_transcript = transcript_path or _default_transcript_path(video)
-        words = _words_in_range(resolved_transcript, start, end)
-        silences = _silence_windows(words, start, end)
+        transcript_available = resolved_transcript is not None and resolved_transcript.is_file()
+        words = _words_in_range(resolved_transcript, start, end) if transcript_available else []
+        # An absent transcript says nothing about whether the audio is silent.
+        silences = _silence_windows(words, start, end) if transcript_available else []
 
         header_font = _font(20)
         label_font = _font(14)
@@ -219,7 +221,8 @@ def render_timeline_image(
             draw.line((x, points[index][1], x, points[index + 1][1]), fill=WAVE, width=1)
 
         label_top = 430
-        draw.text((40, label_top), "Words in range", fill=FG, font=label_font)
+        label = "Words in range" if transcript_available else "Transcript unavailable; silence not inferred"
+        draw.text((40, label_top), label, fill=FG, font=label_font)
         for word in words:
             if word.get("type") != "word":
                 continue
