@@ -60,7 +60,7 @@ def group_words(words: list[dict[str, Any]], *, silence_threshold: float = 0.5) 
                 phrases.append(flushed)
             current = []
             current_speaker = None
-        if current and speaker is not None and current_speaker is not None and speaker != current_speaker:
+        if current and speaker != current_speaker:
             flushed = _flush_phrase(current, current_speaker)
             if flushed:
                 phrases.append(flushed)
