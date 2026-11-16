@@ -121,6 +121,11 @@ Pack transcripts:
 codex-video-use-pack --edit-dir /path/to/my-footage/edit
 ```
 
+Packed phrases split at speaker changes, including transitions to or from an
+unknown speaker. Unattributed words and audio events remain unlabeled rather
+than inheriting the preceding speaker. Consecutive unknown words still group
+together under the usual silence-gap rule.
+
 Build a decision image:
 
 ```bash
