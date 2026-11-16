@@ -1,10 +1,36 @@
 from __future__ import annotations
 
 import argparse
+import math
 from pathlib import Path
 from typing import Any
 
 from .utils import load_json
+
+
+def _validate_silence_threshold(value: float) -> None:
+    try:
+        valid = (
+            isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and math.isfinite(value)
+            and value >= 0
+        )
+    except OverflowError:
+        valid = False
+    if not valid:
+        raise ValueError("silence threshold must be a finite non-negative number")
+
+
+def _parse_silence_threshold(value: str) -> float:
+    try:
+        threshold = float(value)
+        _validate_silence_threshold(threshold)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            "silence threshold must be a finite non-negative number"
+        ) from exc
+    return threshold
 
 
 def _speaker_label(word: dict[str, Any]) -> str | None:
@@ -35,6 +61,7 @@ def _flush_phrase(bucket: list[dict[str, Any]], speaker: str | None) -> dict[str
 
 
 def group_words(words: list[dict[str, Any]], *, silence_threshold: float = 0.5) -> list[dict[str, Any]]:
+    _validate_silence_threshold(silence_threshold)
     phrases: list[dict[str, Any]] = []
     current: list[dict[str, Any]] = []
     current_speaker: str | None = None
@@ -101,6 +128,7 @@ def render_packed_markdown(items: list[tuple[str, float, list[dict[str, Any]]]],
 
 
 def pack_edit_dir(edit_dir: Path, *, silence_threshold: float = 0.5, output: Path | None = None) -> Path:
+    _validate_silence_threshold(silence_threshold)
     transcripts_dir = edit_dir.resolve() / "transcripts"
     transcript_files = sorted(transcripts_dir.glob("*.json"))
     if not transcript_files:
@@ -123,7 +151,10 @@ def pack_edit_dir(edit_dir: Path, *, silence_threshold: float = 0.5, output: Pat
 def build_pack_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Pack transcript JSON files into a compact markdown view.")
     parser.add_argument("--edit-dir", type=Path, required=True)
-    parser.add_argument("--silence-threshold", type=float, default=0.5)
+    parser.add_argument(
+        "--silence-threshold", type=_parse_silence_threshold, default=0.5,
+        help="minimum silence gap in seconds (finite and non-negative; default: 0.5)",
+    )
     parser.add_argument("-o", "--output", type=Path, default=None)
     return parser
 
