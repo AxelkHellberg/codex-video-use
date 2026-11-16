@@ -121,6 +121,12 @@ Pack transcripts:
 codex-video-use-pack --edit-dir /path/to/my-footage/edit
 ```
 
+Use `--silence-threshold SECONDS` to adjust the minimum gap that starts a new
+phrase (default: `0.5`). The value must be finite and non-negative; zero starts a
+new phrase at every non-negative gap. The Python functions `group_words()` and
+`pack_edit_dir()` apply the same validation and raise `ValueError` for invalid
+thresholds before processing transcripts.
+
 Build a decision image:
 
 ```bash
