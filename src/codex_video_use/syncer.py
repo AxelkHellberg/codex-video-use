@@ -20,12 +20,23 @@ def ensure_upstream_remote(repo_root: Path, upstream_repo: str) -> None:
         _git(["remote", "add", "upstream", upstream_repo], repo_root=repo_root)
 
 
-def fetch_upstream(repo_root: Path) -> None:
-    _git(["fetch", "upstream"], repo_root=repo_root)
+def fetch_upstream(repo_root: Path, branch: str) -> None:
+    _git(["check-ref-format", f"refs/heads/{branch}"], repo_root=repo_root)
+    # An existing remote may fetch only the branch selected by a single-branch clone.
+    _git(["fetch", "--no-tags", "upstream",
+          f"+refs/heads/{branch}:refs/remotes/upstream/{branch}"], repo_root=repo_root)
 
 
 def upstream_head(repo_root: Path, branch: str) -> str:
-    return _git(["rev-parse", f"upstream/{branch}"], repo_root=repo_root, capture_output=True).stdout.strip()
+    return _git(["rev-parse", f"refs/remotes/upstream/{branch}"], repo_root=repo_root, capture_output=True).stdout.strip()
+
+
+def ensure_checkpoint(repo_root: Path, sha: str) -> None:
+    if _git(["cat-file", "-e", f"{sha}^{{commit}}"], repo_root=repo_root,
+            capture_output=True, check=False).returncode != 0:
+        # A normal fetch does not restore an older checkpoint outside shallow history.
+        _git(["fetch", "--no-tags", "--", "upstream", sha], repo_root=repo_root)
+        _git(["cat-file", "-e", f"{sha}^{{commit}}"], repo_root=repo_root)
 
 
 def changed_paths(repo_root: Path, previous_sha: str | None, current_sha: str) -> list[str]:
@@ -72,9 +83,11 @@ def scan(repo_root: Path, *, state_path: Path, map_path: Path) -> dict[str, Any]
     state = read_state(state_path)
     mapping = load_yaml(map_path)
     ensure_upstream_remote(repo_root, state["upstream_repo"])
-    fetch_upstream(repo_root)
+    fetch_upstream(repo_root, state["tracked_branch"])
     head = upstream_head(repo_root, state["tracked_branch"])
     last_synced = state.get("last_synced_sha")
+    if last_synced and head != last_synced:
+        ensure_checkpoint(repo_root, last_synced)
     diff_paths = changed_paths(repo_root, last_synced, head) if head != last_synced else []
     relevant = classify_changes(diff_paths, mapping)
     status = "up_to_date" if head == last_synced else "changes_detected"
