@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import shutil
+import tempfile
 from pathlib import Path
 
 from .utils import run
@@ -40,9 +42,16 @@ def apply_grade(input_path: Path, output_path: Path, *, filter_string: str) -> P
         "yuv420p",
         "-c:a",
         "copy",
-        str(output_path),
     ]
-    run(command)
+    destination = output_path.resolve()
+    with tempfile.TemporaryDirectory(
+        prefix=f".{destination.stem}-grade-", dir=destination.parent
+    ) as temporary_dir:
+        temporary_output = Path(temporary_dir) / destination.name
+        run([*command, str(temporary_output)])
+        if destination.exists():
+            shutil.copymode(destination, temporary_output)
+        temporary_output.replace(destination)
     print(f"graded -> {output_path}")
     return output_path
 
