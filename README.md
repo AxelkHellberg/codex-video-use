@@ -134,6 +134,11 @@ codex-video-use-render /path/to/my-footage/edit/edl.json -o /path/to/my-footage/
 codex-video-use-render /path/to/my-footage/edit/edl.json -o /path/to/my-footage/edit/final.mp4 --build-subtitles
 ```
 
+Segment ranges must fit within their source video's duration. The renderer checks
+all ranges before creating render outputs, preferring the video-track duration
+and accounting for its start time relative to the container. It falls back to
+container duration when track duration is unavailable.
+
 Scan upstream:
 
 ```bash

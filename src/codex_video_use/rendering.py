@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 from fractions import Fraction
 from pathlib import Path
@@ -191,6 +192,80 @@ def _probe_source_fps(source_path: Path) -> str | None:
         except argparse.ArgumentTypeError:
             continue
     return None
+
+
+def _source_video_bounds(source_path: Path) -> tuple[float, float] | None:
+    result = run(
+        [
+            "ffprobe", "-v", "error", "-select_streams", "v:0",
+            "-show_entries", "stream=duration,start_time:format=duration,start_time",
+            "-of", "json", str(source_path),
+        ],
+        capture_output=True,
+        check=False,
+        quiet=True,
+    )
+    if result.returncode != 0:
+        return None
+    try:
+        payload = json.loads(result.stdout or "{}")
+    except json.JSONDecodeError:
+        return None
+    streams = payload.get("streams") or []
+    if not streams:
+        return None
+
+    def finite_number(value: Any) -> float | None:
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return None
+        return number if math.isfinite(number) else None
+
+    stream, container = streams[0], payload.get("format") or {}
+    # FFmpeg's input -ss is relative to the container start, not the video start.
+    container_start = finite_number(container.get("start_time")) or 0.0
+    video_start = finite_number(stream.get("start_time"))
+    if video_start is None:
+        video_start = container_start
+    offset = video_start - container_start
+    first_video_time = max(0.0, offset)
+    # Prefer the video track: a longer audio track can extend the container.
+    for value, duration_offset in (
+        (stream.get("duration"), offset),
+        (container.get("duration"), 0.0),
+    ):
+        duration = finite_number(value)
+        if duration is not None and duration > 0:
+            endpoint = duration + duration_offset
+            if math.isfinite(endpoint) and endpoint > first_video_time:
+                return first_video_time, endpoint
+    return None
+
+
+def _validate_segment_media_bounds(segments: list[dict[str, Any]], sources: dict[str, Path]) -> None:
+    bounds: dict[Path, tuple[float, float] | None] = {}
+    for index, segment in enumerate(segments, start=1):
+        source = sources[segment["source"]]
+        if source not in bounds:
+            bounds[source] = _source_video_bounds(source)
+        source_bounds = bounds[source]
+        if source_bounds is None:
+            raise SystemExit(f"segment {index}: cannot determine a finite positive video duration for {source}")
+        video_start, video_end = source_bounds
+        start, end = float(segment["start"]), float(segment["end"])
+        # ffprobe prints durations to microsecond precision; allow its rounding.
+        if (
+            not math.isfinite(start)
+            or not math.isfinite(end)
+            or start + 0.000001 < video_start
+            or start >= video_end
+            or end > video_end + 0.000001
+        ):
+            raise SystemExit(
+                f"segment {index}: range {start:g}–{end:g}s lies outside video duration interval "
+                f"{video_start:g}–{video_end:g}s for {source}"
+            )
 
 
 def _video_filters(source_path: Path, *, preview: bool, grade: str | None) -> str:
@@ -563,10 +638,11 @@ def render_edl(
 ) -> Path:
     edl_path = edl_path.resolve()
     edit_dir = edl_path.parent
-    ensure_dir(output_path.resolve().parent)
     edl = load_json(edl_path)
     source_paths = _source_map(edl, edit_dir)
     segments = _segment_list(edl)
+    _validate_segment_media_bounds(segments, source_paths)
+    ensure_dir(output_path.resolve().parent)
     output_fps = fps or (_probe_source_fps(source_paths[segments[0]["source"]]) if segments else None) or "24"
     clips_dir = ensure_dir(edit_dir / ("clips-preview" if preview else "clips"))
     rendered_segments = []
