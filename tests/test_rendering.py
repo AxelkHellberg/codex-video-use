@@ -151,6 +151,7 @@ def test_render_edl_reuses_one_source_fps_for_every_segment(tmp_path: Path, monk
         return rendered
 
     monkeypatch.setattr(rendering, "_probe_source_fps", lambda _: "30000/1001")
+    monkeypatch.setattr(rendering, "_source_video_bounds", lambda _: (0.0, 2.0))
     monkeypatch.setattr(rendering, "extract_segment", fake_extract_segment)
     monkeypatch.setattr(rendering, "concat_segments", lambda _segments, base, _edit: base.write_bytes(b"") or base)
     monkeypatch.setattr(
