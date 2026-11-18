@@ -132,7 +132,7 @@ def test_published_checkpoint_survives_a_fresh_clone(tmp_path: Path, capsys) -> 
     assert run(["git", "status", "--porcelain"], cwd=fresh_clone, capture_output=True, quiet=True).stdout == ""
 
 
-def _scan_files(repo: Path, upstream: Path, branch: str, previous_sha: str) -> tuple[Path, Path]:
+def _scan_files(repo: Path, upstream: Path, branch: str, previous_sha: str | None) -> tuple[Path, Path]:
     state = repo / "state.json"
     mapping = repo / "map.yaml"
     write_json(state, {
@@ -234,4 +234,62 @@ def test_scan_keeps_checkpoint_when_previous_object_cannot_be_retrieved(tmp_path
 
     assert state.read_bytes() == before
     assert run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, quiet=True).stdout.strip() == current
+
+
+@pytest.mark.parametrize("has_checkpoint", [False, True])
+def test_scan_rejects_an_upstream_remote_for_another_repository(
+    tmp_path: Path, monkeypatch, has_checkpoint: bool
+) -> None:
+    import codex_video_use.syncer as syncer
+
+    upstreams = []
+    for name in ("previous", "configured"):
+        upstream = tmp_path / name
+        upstream.mkdir()
+        run(["git", "init", "-b", "main"], cwd=upstream, quiet=True)
+        (upstream / "README.md").write_text(name, encoding="utf-8")
+        upstreams.append((upstream, _commit(upstream, name)))
+    previous, previous_sha = upstreams[0]
+    configured, _ = upstreams[1]
+    repo = tmp_path / "repo"
+    run(["git", "clone", "--origin", "upstream", previous.as_uri(), str(repo)], quiet=True)
+    state, mapping = _scan_files(repo, configured, "main", previous_sha if has_checkpoint else None)
+    state_before = state.read_bytes()
+    config_before = (repo / ".git" / "config").read_bytes()
+    refs_before = run(["git", "show-ref"], cwd=repo, capture_output=True, quiet=True).stdout
+
+    def unexpected_fetch(*_args, **_kwargs):
+        pytest.fail("a mismatched upstream must be rejected before fetching")
+
+    monkeypatch.setattr(syncer, "fetch_upstream", unexpected_fetch)
+    with pytest.raises(RuntimeError, match="upstream remote.*configured repository"):
+        scan(repo, state_path=state, map_path=mapping)
+
+    assert state.read_bytes() == state_before
+    assert (repo / ".git" / "config").read_bytes() == config_before
+    assert run(["git", "show-ref"], cwd=repo, capture_output=True, quiet=True).stdout == refs_before
+    assert run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, quiet=True).stdout.strip() == previous_sha
+    assert (repo / "README.md").read_text(encoding="utf-8") == "previous"
+
+
+def test_scan_accepts_matching_effective_urls_after_git_url_rewriting(tmp_path: Path) -> None:
+    upstream = tmp_path / "upstream"
+    upstream.mkdir()
+    run(["git", "init", "-b", "main"], cwd=upstream, quiet=True)
+    (upstream / "README.md").write_text("initial\n", encoding="utf-8")
+    initial = _commit(upstream, "initial")
+    repo = tmp_path / "repo"
+    run(["git", "clone", "--origin", "upstream", upstream.as_uri(), str(repo)], quiet=True)
+    state, mapping = _scan_files(repo, upstream, "main", initial)
+    payload = json.loads(state.read_text(encoding="utf-8"))
+    payload["upstream_repo"] = "local-fixture:video"
+    write_json(state, payload)
+    run(["git", "config", f"url.{upstream.as_uri()}.insteadOf", "local-fixture:video"], cwd=repo, quiet=True)
+    before = state.read_bytes()
+
+    result = scan(repo, state_path=state, map_path=mapping)
+
+    assert result["status"] == "up_to_date"
+    assert result["current_upstream_sha"] == initial
+    assert state.read_bytes() == before
 

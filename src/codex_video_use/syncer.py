@@ -18,6 +18,15 @@ def ensure_upstream_remote(repo_root: Path, upstream_repo: str) -> None:
     remotes = _git(["remote"], repo_root=repo_root, capture_output=True).stdout.splitlines()
     if "upstream" not in remotes:
         _git(["remote", "add", "upstream", upstream_repo], repo_root=repo_root)
+        return
+    actual_url = _git(["remote", "get-url", "upstream"], repo_root=repo_root, capture_output=True).stdout.strip()
+    # Resolve configured URL rewrites without contacting either repository.
+    expected_url = _git(["ls-remote", "--get-url", upstream_repo], repo_root=repo_root, capture_output=True).stdout.strip()
+    if actual_url != expected_url:
+        raise RuntimeError(
+            "existing upstream remote does not match the configured repository; "
+            "review upstream_repo and the upstream remote URL before scanning"
+        )
 
 
 def fetch_upstream(repo_root: Path, branch: str) -> None:
