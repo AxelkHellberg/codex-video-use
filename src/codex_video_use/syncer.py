@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
-from .utils import REPO_ROOT, load_json, load_yaml, now_iso, run, write_json
+from .utils import CommandFailure, REPO_ROOT, load_json, load_yaml, now_iso, run, write_json
 
 
 def _git(args: list[str], *, repo_root: Path, capture_output: bool = False, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -30,10 +31,14 @@ def upstream_head(repo_root: Path, branch: str) -> str:
 
 def changed_paths(repo_root: Path, previous_sha: str | None, current_sha: str) -> list[str]:
     if previous_sha:
-        result = _git(["diff", "--name-only", previous_sha, current_sha], repo_root=repo_root, capture_output=True)
+        args = ["diff", "--name-only", "-z", previous_sha, current_sha]
     else:
-        result = _git(["ls-tree", "-r", "--name-only", current_sha], repo_root=repo_root, capture_output=True)
-    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        args = ["ls-tree", "-r", "--name-only", "-z", current_sha]
+    # Keep raw NUL-delimited output: text mode also changes CR/LF in filenames.
+    result = subprocess.run(["git", *args], cwd=repo_root, capture_output=True)
+    if result.returncode != 0:
+        raise CommandFailure(os.fsdecode(result.stderr).strip() or "git path listing failed")
+    return [os.fsdecode(path) for path in result.stdout.split(b"\0") if path]
 
 
 def classify_changes(paths: list[str], mapping: dict[str, Any]) -> list[dict[str, Any]]:
