@@ -124,8 +124,10 @@ def validate(repo_root: Path) -> None:
 def build_sync_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Scan, validate, and record upstream sync state.")
     parser.add_argument("--repo-root", type=Path, default=REPO_ROOT)
-    parser.add_argument("--state", type=Path, default=REPO_ROOT / "sync" / "upstream-state.json")
-    parser.add_argument("--map", dest="map_path", type=Path, default=REPO_ROOT / "sync" / "upstream-map.yaml")
+    parser.add_argument("--state", type=Path, default=None,
+                        help="State file (default: <repo-root>/sync/upstream-state.json)")
+    parser.add_argument("--map", dest="map_path", type=Path, default=None,
+                        help="Mapping file (default: <repo-root>/sync/upstream-map.yaml)")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     scan_parser = subparsers.add_parser("scan")
@@ -148,8 +150,8 @@ def build_sync_parser() -> argparse.ArgumentParser:
 
 def run_sync_cli(args: argparse.Namespace) -> int:
     repo_root = args.repo_root.resolve()
-    state_path = args.state.resolve()
-    map_path = args.map_path.resolve()
+    state_path = (args.state or (repo_root / "sync" / "upstream-state.json")).resolve()
+    map_path = (args.map_path or (repo_root / "sync" / "upstream-map.yaml")).resolve()
 
     if args.command == "scan":
         payload = scan(repo_root, state_path=state_path, map_path=map_path)

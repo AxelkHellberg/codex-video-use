@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from codex_video_use.syncer import build_sync_parser, classify_changes, run_sync_cli, scan
 from codex_video_use.utils import run, write_json, write_yaml
 
@@ -128,4 +130,81 @@ def test_published_checkpoint_survives_a_fresh_clone(tmp_path: Path, capsys) -> 
     assert persisted["last_run_at"]
     assert scan(fresh_clone, state_path=fresh_clone / "state.json", map_path=fresh_clone / "map.yaml")["status"] == "up_to_date"
     assert run(["git", "status", "--porcelain"], cwd=fresh_clone, capture_output=True, quiet=True).stdout == ""
+
+
+def test_sync_cli_scans_with_paths_from_selected_repository(tmp_path: Path, monkeypatch, capsys) -> None:
+    import codex_video_use.syncer as syncer
+
+    source_root = tmp_path / "installed-checkout"
+    selected_root = tmp_path / "selected-checkout"
+    monkeypatch.setattr(syncer, "REPO_ROOT", source_root)
+    calls = []
+
+    def capture_scan(repo_root: Path, *, state_path: Path, map_path: Path):
+        calls.append((repo_root, state_path, map_path))
+        return {"status": "up_to_date"}
+
+    monkeypatch.setattr(syncer, "scan", capture_scan)
+    args = build_sync_parser().parse_args(["--repo-root", str(selected_root), "scan", "--json"])
+
+    assert run_sync_cli(args) == 0
+    assert json.loads(capsys.readouterr().out) == {"status": "up_to_date"}
+    assert calls == [(selected_root, selected_root / "sync" / "upstream-state.json",
+                      selected_root / "sync" / "upstream-map.yaml")]
+
+
+@pytest.mark.parametrize("command", ["checkpoint", "record"])
+def test_sync_cli_updates_only_selected_repository_checkpoint(
+    tmp_path: Path, monkeypatch, capsys, command: str
+) -> None:
+    import codex_video_use.syncer as syncer
+
+    source_root = tmp_path / "installed-checkout"
+    selected_root = tmp_path / "selected-checkout"
+    for repo_root in (source_root, selected_root):
+        (repo_root / "sync").mkdir(parents=True)
+        write_json(repo_root / "sync" / "upstream-state.json", {"last_synced_sha": "old"})
+    source_state = source_root / "sync" / "upstream-state.json"
+    before = source_state.read_bytes()
+    monkeypatch.setattr(syncer, "REPO_ROOT", source_root)
+    options = ["--note", "Reviewed local fixture"] if command == "checkpoint" else ["--result", "success"]
+    args = build_sync_parser().parse_args([
+        "--repo-root", str(selected_root), command, "--sha", "a" * 40, *options, "--json",
+    ])
+
+    assert run_sync_cli(args) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["last_synced_sha"] == "a" * 40
+    assert json.loads((selected_root / "sync" / "upstream-state.json").read_text())["last_synced_sha"] == "a" * 40
+    assert source_state.read_bytes() == before
+
+
+@pytest.mark.parametrize("overrides", [[], ["state"], ["map"], ["state", "map"]])
+def test_sync_cli_path_overrides_resolve_from_working_directory(
+    tmp_path: Path, monkeypatch, overrides: list[str]
+) -> None:
+    import codex_video_use.syncer as syncer
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(syncer, "REPO_ROOT", tmp_path / "installed-checkout")
+    calls = []
+
+    def capture_scan(repo_root: Path, *, state_path: Path, map_path: Path):
+        calls.append((repo_root, state_path, map_path))
+        return {"status": "up_to_date"}
+
+    monkeypatch.setattr(syncer, "scan", capture_scan)
+    options = []
+    for name in overrides:
+        options += [f"--{name}", f"custom/{name}.json"]
+    args = build_sync_parser().parse_args(["--repo-root", "selected-checkout", *options, "scan", "--json"])
+    assert run_sync_cli(args) == 0
+    expected_state = tmp_path / "custom" / "state.json" if "state" in overrides else (
+        tmp_path / "selected-checkout" / "sync" / "upstream-state.json"
+    )
+    expected_map = tmp_path / "custom" / "map.json" if "map" in overrides else (
+        tmp_path / "selected-checkout" / "sync" / "upstream-map.yaml"
+    )
+    expected_paths = (expected_state, expected_map)
+    assert calls == [(tmp_path / "selected-checkout", *expected_paths)]
 
