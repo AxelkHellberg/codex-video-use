@@ -30,3 +30,17 @@ Do not run `record --result success` after pushing as the normal sync sequence:
 that creates a new uncommitted state-file change. The older `record` command stays
 available for existing callers, but the committed checkpoint is the durable record
 of which upstream SHA was reviewed.
+
+## Selecting another checkout
+
+Pass `--repo-root` before the subcommand to work with another checkout. Its
+`sync/upstream-state.json` and `sync/upstream-map.yaml` are used by default:
+
+```bash
+.venv/bin/codex-video-use-sync --repo-root /path/to/checkout scan --json
+```
+
+`--state` and `--map` independently override those paths. Relative overrides are
+resolved from the current working directory, as is a relative `--repo-root`.
+For example, `--repo-root ./checkout --state ./review-state.json scan --json`
+uses `./review-state.json` and `./checkout/sync/upstream-map.yaml`.
