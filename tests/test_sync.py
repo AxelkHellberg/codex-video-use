@@ -3,8 +3,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from codex_video_use.syncer import build_sync_parser, classify_changes, run_sync_cli, scan
-from codex_video_use.utils import run, write_json, write_yaml
+import pytest
+
+from codex_video_use.syncer import build_sync_parser, changed_paths, classify_changes, run_sync_cli, scan
+from codex_video_use.utils import CommandFailure, run, write_json, write_yaml
 
 
 def _commit(repo: Path, message: str) -> str:
@@ -30,6 +32,95 @@ def test_classify_changes_maps_upstream_paths() -> None:
     classified = classify_changes(["README.md", "helpers/render.py"], mapping)
     assert classified[0]["name"] == "docs"
     assert "README.md" in classified[0]["matches"]
+
+
+@pytest.mark.parametrize("initial_scan", [True, False])
+def test_changed_paths_preserves_literal_git_filenames(tmp_path: Path, initial_scan: bool) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    run(["git", "init", "-b", "main"], cwd=repo, quiet=True)
+    (repo / "unchanged.md").write_text("unchanged\n", encoding="utf-8")
+    previous_sha = _commit(repo, "initial")
+    names = [
+        "skills/manim-video/café.md",
+        "skills/manim-video/tab\tname.md",
+        "skills/manim-video/line\nname.md",
+        "skills/manim-video/carriage\rreturn.md",
+        "skills/manim-video/quote\"slash\\name.md",
+        "skills/manim-video/trailing.md ",
+        " leading.md",
+    ]
+    for name in names:
+        path = repo / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("new\n", encoding="utf-8")
+    current_sha = _commit(repo, "add named files")
+
+    paths = changed_paths(repo, None if initial_scan else previous_sha, current_sha)
+
+    assert sorted(paths) == sorted(names + (["unchanged.md"] if initial_scan else []))
+    mapping = {"mappings": [
+        {"name": "rendering", "upstream_paths": ["skills/manim-video/**"]},
+        {"name": "leading", "upstream_paths": [" leading.md"]},
+    ]}
+    groups = classify_changes(paths, mapping)
+    assert groups[0]["matches"] == sorted(names[:-1])
+    assert groups[1]["matches"] == [names[-1]]
+
+
+def test_changed_paths_preserves_deleted_filenames_and_empty_diff(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    run(["git", "init", "-b", "main"], cwd=repo, quiet=True)
+    path = repo / "deleted\r\nfile.md "
+    path.write_text("removed\n", encoding="utf-8")
+    previous_sha = _commit(repo, "initial")
+    path.unlink()
+    current_sha = _commit(repo, "delete file")
+
+    assert changed_paths(repo, previous_sha, current_sha) == [path.name]
+    assert changed_paths(repo, current_sha, current_sha) == []
+
+
+def test_changed_paths_reports_git_failure(tmp_path: Path) -> None:
+    with pytest.raises(CommandFailure, match="not a git repository"):
+        changed_paths(tmp_path, None, "HEAD")
+
+
+@pytest.mark.parametrize("initial_scan", [True, False])
+def test_scan_classifies_unusual_filenames_without_changing_checkpoint(tmp_path: Path, initial_scan: bool) -> None:
+    upstream = tmp_path / "upstream"
+    upstream.mkdir()
+    run(["git", "init", "-b", "main"], cwd=upstream, quiet=True)
+    (upstream / "README.md").write_text("initial\n", encoding="utf-8")
+    previous_sha = _commit(upstream, "initial")
+    name = "skills/manim-video/café\r\n.md "
+    path = upstream / name
+    path.parent.mkdir(parents=True)
+    path.write_text("new\n", encoding="utf-8")
+    current_sha = _commit(upstream, "add rendering guide")
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    run(["git", "init", "-b", "main"], cwd=repo_root, quiet=True)
+    state_path = repo_root / "state.json"
+    map_path = repo_root / "map.yaml"
+    write_json(state_path, {
+        "upstream_repo": str(upstream),
+        "tracked_branch": "main",
+        "last_synced_sha": None if initial_scan else previous_sha,
+    })
+    write_yaml(map_path, {"mappings": [
+        {"name": "rendering", "upstream_paths": ["skills/manim-video/**"]},
+    ]})
+    original_state = state_path.read_bytes()
+
+    payload = scan(repo_root, state_path=state_path, map_path=map_path)
+
+    assert payload["status"] == "changes_detected"
+    assert payload["current_upstream_sha"] == current_sha
+    assert name in payload["changed_paths"]
+    assert payload["relevant_groups"][0]["matches"] == [name]
+    assert state_path.read_bytes() == original_state
 
 
 def test_scan_reports_noop_and_changes(tmp_path: Path) -> None:
