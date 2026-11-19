@@ -134,6 +134,17 @@ codex-video-use-render /path/to/my-footage/edit/edl.json -o /path/to/my-footage/
 codex-video-use-render /path/to/my-footage/edit/edl.json -o /path/to/my-footage/edit/final.mp4 --build-subtitles
 ```
 
+Grade a clip:
+
+```bash
+codex-video-use-grade /path/to/my-footage/clip.webm
+```
+
+The default output is `<name>.graded<extension>` beside the source. WebM inputs
+use `<name>.graded.mp4` because grading encodes H.264 video, which WebM cannot
+contain. Use `-o` to select an output path with an H.264-compatible container,
+such as MP4, MOV or MKV. Audio retains its existing stream-copy behavior.
+
 Scan upstream:
 
 ```bash

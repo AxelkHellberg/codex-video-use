@@ -85,7 +85,8 @@ def grade_main() -> int:
         for name, value in GRADE_PRESETS.items():
             print(f"{name}: {value}")
         return 0
-    output = args.output or args.input_path.with_name(f"{args.input_path.stem}.graded{args.input_path.suffix}")
+    suffix = ".mp4" if args.input_path.suffix.lower() == ".webm" else args.input_path.suffix
+    output = args.output or args.input_path.with_name(f"{args.input_path.stem}.graded{suffix}")
     apply_grade(args.input_path.resolve(), output.resolve(), filter_string=args.filter)
     return 0
 
