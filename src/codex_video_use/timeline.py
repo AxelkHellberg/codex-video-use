@@ -183,19 +183,21 @@ def render_timeline_image(
             aspect = image.width / image.height
             scaled_frames.append(image.resize((int(ribbon_height * aspect), ribbon_height), Image.LANCZOS))
 
-        canvas_width = max(1600, sum(image.width for image in scaled_frames) + 120)
+        strip_left = 40
+        frame_gap = 4
+        ribbon_width = sum(image.width for image in scaled_frames) + frame_gap * max(0, len(scaled_frames) - 1)
+        canvas_width = max(1600, strip_left + ribbon_width + 40)
         canvas_height = 520
         canvas = Image.new("RGB", (canvas_width, canvas_height), BG)
         draw = ImageDraw.Draw(canvas, "RGBA")
         draw.text((40, 18), f"{video.name}   {start:.2f}s -> {end:.2f}s", fill=FG, font=header_font)
 
-        cursor_x = 40
+        cursor_x = strip_left
         strip_top = 60
         for image in scaled_frames:
             canvas.paste(image, (cursor_x, strip_top))
-            cursor_x += image.width + 4
-        strip_left = 40
-        strip_right = max(strip_left + 1, cursor_x - 4)
+            cursor_x += image.width + frame_gap
+        strip_right = max(strip_left + 1, cursor_x - frame_gap)
 
         waveform_top = 280
         waveform_height = 120
