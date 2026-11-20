@@ -21,15 +21,16 @@ def resolve_filter(name_or_filter: str | None) -> str:
 
 def apply_grade(input_path: Path, output_path: Path, *, filter_string: str) -> Path:
     vf = resolve_filter(filter_string)
+    # H.264 with yuv420p requires even dimensions, including after custom filters.
+    padding = "pad=ceil(iw/2)*2:ceil(ih/2)*2"
+    vf = f"{vf},{padding}" if vf else padding
     command = [
         "ffmpeg",
         "-y",
         "-i",
         str(input_path),
-    ]
-    if vf:
-        command += ["-vf", vf]
-    command += [
+        "-vf",
+        vf,
         "-c:v",
         "libx264",
         "-preset",
