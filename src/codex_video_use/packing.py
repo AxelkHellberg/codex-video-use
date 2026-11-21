@@ -19,7 +19,7 @@ def _flush_phrase(bucket: list[dict[str, Any]], speaker: str | None) -> dict[str
     if not bucket:
         return None
     start = float(bucket[0]["start"])
-    end = float(bucket[-1]["end"])
+    end = max(float(word["end"]) for word in bucket)
     parts: list[str] = []
     for word in bucket:
         raw = str(word.get("text", "")).strip()
@@ -38,7 +38,7 @@ def group_words(words: list[dict[str, Any]], *, silence_threshold: float = 0.5) 
     phrases: list[dict[str, Any]] = []
     current: list[dict[str, Any]] = []
     current_speaker: str | None = None
-    last_end: float | None = None
+    covered_end: float | None = None
 
     for word in words:
         kind = word.get("type", "word")
@@ -54,7 +54,7 @@ def group_words(words: list[dict[str, Any]], *, silence_threshold: float = 0.5) 
 
         speaker = _speaker_label(word)
         start = float(word.get("start", 0.0))
-        if current and last_end is not None and start - last_end >= silence_threshold:
+        if current and covered_end is not None and start - covered_end >= silence_threshold:
             flushed = _flush_phrase(current, current_speaker)
             if flushed:
                 phrases.append(flushed)
@@ -67,8 +67,10 @@ def group_words(words: list[dict[str, Any]], *, silence_threshold: float = 0.5) 
             current = []
         if not current:
             current_speaker = speaker
+            covered_end = None
         current.append(word)
-        last_end = float(word.get("end", start))
+        end = float(word.get("end", start))
+        covered_end = end if covered_end is None else max(covered_end, end)
 
     flushed = _flush_phrase(current, current_speaker)
     if flushed:
@@ -109,7 +111,7 @@ def pack_edit_dir(edit_dir: Path, *, silence_threshold: float = 0.5, output: Pat
     for path in transcript_files:
         payload = load_json(path)
         phrases = group_words(payload.get("words", []), silence_threshold=silence_threshold)
-        duration = float(payload.get("duration_seconds") or (phrases[-1]["end"] if phrases else 0.0))
+        duration = float(payload.get("duration_seconds") or max((phrase["end"] for phrase in phrases), default=0.0))
         items.append((path.stem, duration, phrases))
     destination = output or (edit_dir / "takes_packed.md")
     destination.write_text(
