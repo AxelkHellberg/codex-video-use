@@ -553,6 +553,16 @@ def composite_output(
     return output_path
 
 
+def _validate_media_output(output_path: Path, media_paths: list[Path]) -> None:
+    destination = output_path.resolve()
+    for media_path in media_paths:
+        resolved_media = media_path.resolve()
+        if destination == resolved_media or (
+            destination.exists() and resolved_media.exists() and destination.samefile(resolved_media)
+        ):
+            raise SystemExit(f"render output must not alias input media: {media_path}")
+
+
 def render_edl(
     edl_path: Path,
     *,
@@ -565,9 +575,15 @@ def render_edl(
 ) -> Path:
     edl_path = edl_path.resolve()
     edit_dir = edl_path.parent
-    ensure_dir(output_path.resolve().parent)
     edl = load_json(edl_path)
     source_paths = _source_map(edl, edit_dir)
+    overlays = list(edl.get("overlays") or [])
+    media_paths = list(source_paths.values())
+    for overlay in overlays:
+        path = Path(overlay["file"])
+        media_paths.append(path if path.is_absolute() else edit_dir / path)
+    _validate_media_output(output_path, media_paths)
+    ensure_dir(output_path.resolve().parent)
     segments = _segment_list(edl)
     output_fps = fps or (_probe_source_fps(source_paths[segments[0]["source"]]) if segments else None) or "24"
     with tempfile.TemporaryDirectory(prefix=".render-", dir=output_path.resolve().parent) as work_name:
@@ -599,7 +615,6 @@ def render_edl(
             elif "subtitles" in edl:
                 subtitles_path = _resolve_subtitles_path(str(edl["subtitles"]), edit_dir)
 
-        overlays = list(edl.get("overlays") or [])
         rendered_path = work_dir / f"rendered{output_path.suffix}"
         prenorm_path = rendered_path if no_normalize else work_dir / "prenorm.mp4"
         composite_output(base_path, overlays=overlays, subtitles_path=subtitles_path, output_path=prenorm_path, edit_dir=edit_dir)

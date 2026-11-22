@@ -134,6 +134,9 @@ codex-video-use-render /path/to/my-footage/edit/edl.json -o /path/to/my-footage/
 codex-video-use-render /path/to/my-footage/edit/edl.json -o /path/to/my-footage/edit/final.mp4 --build-subtitles
 ```
 
+Choose an output separate from every source and overlay file. Render rejects paths
+that refer to input media, including symbolic and hard links, before processing.
+
 Scan upstream:
 
 ```bash
