@@ -226,7 +226,8 @@ def render_timeline_image(
             text = str(word.get("text", "")).strip()
             if not text:
                 continue
-            x = strip_left + int(((float(word["start"]) - start) / span) * (strip_right - strip_left))
+            label_start = max(start, float(word["start"]))
+            x = strip_left + int(((label_start - start) / span) * (strip_right - strip_left))
             draw.text((x, label_top + 24), text, fill=ACCENT, font=body_font)
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
