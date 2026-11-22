@@ -290,7 +290,7 @@ def build_master_srt(edl: dict[str, Any], edit_dir: Path, output_path: Path) -> 
         ]
         for chunk in _chunk_words(in_range):
             local_start = max(float(segment["start"]), float(chunk[0]["start"]))
-            local_end = min(float(segment["end"]), float(chunk[-1]["end"]))
+            local_end = min(float(segment["end"]), max(float(word["end"]) for word in chunk))
             out_start = offset + (local_start - float(segment["start"]))
             out_end = offset + (local_end - float(segment["start"]))
             if out_end <= out_start:
