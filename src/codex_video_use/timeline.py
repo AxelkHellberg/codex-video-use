@@ -60,7 +60,8 @@ def _extract_frames(video: Path, start: float, end: float, frame_count: int, tem
                 "-q:v",
                 "3",
                 "-vf",
-                "scale=300:-2",
+                # Pillow uses pixel dimensions, so bake display aspect into the JPEG.
+                r"scale=300:max(2\,2*round(300/dar/2)),setsar=1",
                 str(output),
             ],
             quiet=True,
