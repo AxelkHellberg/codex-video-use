@@ -42,6 +42,8 @@ def run(
     result = subprocess.run(
         command,
         cwd=str(cwd) if cwd else None,
+        # File-based commands must not consume input intended for their caller.
+        stdin=subprocess.DEVNULL,
         text=True,
         capture_output=capture_output,
     )
