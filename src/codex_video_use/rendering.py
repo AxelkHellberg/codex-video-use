@@ -267,20 +267,40 @@ def _srt_time(seconds: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
 
 
+def _transcript_paths_for_segments(
+    segments: list[dict[str, Any]], sources: dict[str, Path], edit_dir: Path,
+) -> dict[str, Path]:
+    paths: dict[str, Path] = {}
+    for segment in segments:
+        source = segment["source"]
+        if source in paths:
+            continue
+        candidates = list(dict.fromkeys([
+            edit_dir / "transcripts" / f"{source}.json",
+            edit_dir / "transcripts" / f"{sources[source].stem}.json",
+        ]))
+        for candidate in candidates:
+            if candidate.is_file():
+                paths[source] = candidate
+                break
+        else:
+            attempted = ", ".join(str(candidate) for candidate in candidates)
+            raise SystemExit(
+                f"transcript for source '{source}' was not found (tried {attempted}). "
+                "Transcribe each selected source before using --build-subtitles, "
+                "or use --no-subtitles."
+            )
+    return paths
+
+
 def build_master_srt(edl: dict[str, Any], edit_dir: Path, output_path: Path) -> Path:
     segments = _segment_list(edl)
     sources = _source_map(edl, edit_dir)
+    transcript_paths = _transcript_paths_for_segments(segments, sources, edit_dir)
     offset = 0.0
     cues: list[tuple[float, float, str]] = []
     for segment in segments:
-        transcript_path = edit_dir / "transcripts" / f"{segment['source']}.json"
-        if not transcript_path.exists():
-            source_stem = sources[segment["source"]].stem
-            transcript_path = edit_dir / "transcripts" / f"{source_stem}.json"
-        if not transcript_path.exists():
-            offset += float(segment["end"]) - float(segment["start"])
-            continue
-        payload = load_json(transcript_path)
+        payload = load_json(transcript_paths[segment["source"]])
         in_range = [
             word
             for word in payload.get("words", [])
@@ -563,10 +583,12 @@ def render_edl(
 ) -> Path:
     edl_path = edl_path.resolve()
     edit_dir = edl_path.parent
-    ensure_dir(output_path.resolve().parent)
     edl = load_json(edl_path)
     source_paths = _source_map(edl, edit_dir)
     segments = _segment_list(edl)
+    if build_subtitles_flag and not no_subtitles:
+        _transcript_paths_for_segments(segments, source_paths, edit_dir)
+    ensure_dir(output_path.resolve().parent)
     output_fps = fps or (_probe_source_fps(source_paths[segments[0]["source"]]) if segments else None) or "24"
     clips_dir = ensure_dir(edit_dir / ("clips-preview" if preview else "clips"))
     rendered_segments = []
