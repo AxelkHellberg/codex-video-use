@@ -134,6 +134,10 @@ codex-video-use-render /path/to/my-footage/edit/edl.json -o /path/to/my-footage/
 codex-video-use-render /path/to/my-footage/edit/edl.json -o /path/to/my-footage/edit/final.mp4 --build-subtitles
 ```
 
+`--build-subtitles` requires a transcript JSON for every source selected by the
+EDL segments. Transcribe those sources first, or use `--no-subtitles` to render
+without captions. Missing transcripts stop the render before media processing.
+
 Scan upstream:
 
 ```bash
