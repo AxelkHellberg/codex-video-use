@@ -6,7 +6,7 @@ import shutil
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, TextIO
 
 import yaml
 
@@ -34,6 +34,7 @@ def run(
     capture_output: bool = False,
     check: bool = True,
     quiet: bool = False,
+    stdout: TextIO | None = None,
 ) -> subprocess.CompletedProcess[str]:
     if not quiet:
         preview = " ".join(command[:8])
@@ -44,6 +45,7 @@ def run(
         cwd=str(cwd) if cwd else None,
         text=True,
         capture_output=capture_output,
+        stdout=stdout,
     )
     if check and result.returncode != 0:
         stderr = (result.stderr or "").strip()

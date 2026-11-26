@@ -30,3 +30,8 @@ Do not run `record --result success` after pushing as the normal sync sequence:
 that creates a new uncommitted state-file change. The older `record` command stays
 available for existing callers, but the committed checkpoint is the durable record
 of which upstream SHA was reviewed.
+
+For machine-readable validation, use `codex-video-use-sync validate --json`.
+Test output streams to standard error; standard output contains only
+`{"status": "ok"}` after a successful run. A failed test run exits nonzero and
+does not emit a success object.
