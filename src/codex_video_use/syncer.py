@@ -117,8 +117,13 @@ def record_checkpoint(state_path: Path, *, sha: str, note: str) -> dict[str, Any
     return state
 
 
-def validate(repo_root: Path) -> None:
-    run([sys.executable, "-m", "pytest"], cwd=repo_root)
+def validate(repo_root: Path, *, json_output: bool = False) -> None:
+    run(
+        [sys.executable, "-m", "pytest"],
+        cwd=repo_root,
+        quiet=json_output,
+        stdout=sys.stderr if json_output else None,
+    )
 
 
 def build_sync_parser() -> argparse.ArgumentParser:
@@ -163,8 +168,9 @@ def run_sync_cli(args: argparse.Namespace) -> int:
         return 0
 
     if args.command == "validate":
-        validate(repo_root)
-        if getattr(args, "json", False):
+        json_output = getattr(args, "json", False)
+        validate(repo_root, json_output=json_output)
+        if json_output:
             print(json.dumps({"status": "ok"}, indent=2))
         return 0
 

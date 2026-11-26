@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
+
+import pytest
 
 from codex_video_use.syncer import build_sync_parser, classify_changes, run_sync_cli, scan
 from codex_video_use.utils import run, write_json, write_yaml
@@ -30,6 +35,49 @@ def test_classify_changes_maps_upstream_paths() -> None:
     classified = classify_changes(["README.md", "helpers/render.py"], mapping)
     assert classified[0]["name"] == "docs"
     assert "README.md" in classified[0]["matches"]
+
+
+@pytest.mark.parametrize("json_output", [False, True])
+@pytest.mark.parametrize("exit_code", [0, 7])
+def test_validation_output_keeps_json_separate_from_child_diagnostics(
+    tmp_path: Path, json_output: bool, exit_code: int
+) -> None:
+    # A fixture module replaces pytest in the child, avoiding recursive test runs.
+    script = (
+        "import sys; "
+        "print('validation stdout', flush=True); "
+        "print('validation stderr', file=sys.stderr, flush=True); "
+        f"sys.exit({exit_code})"
+    )
+    (tmp_path / "pytest.py").write_text(script, encoding="utf-8")
+    arguments = [
+        sys.executable,
+        "-c",
+        "from codex_video_use.cli import sync_main; raise SystemExit(sync_main())",
+        "--repo-root", str(tmp_path), "validate",
+    ]
+    if json_output:
+        arguments.append("--json")
+    result = subprocess.run(
+        arguments,
+        cwd=tmp_path,
+        env=dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[1] / "src")),
+        text=True,
+        capture_output=True,
+        timeout=10,
+    )
+    assert (result.returncode == 0) is (exit_code == 0)
+    assert "validation stderr" in result.stderr
+    if json_output:
+        assert "validation stdout" in result.stderr
+        if exit_code:
+            assert result.stdout == ""
+        else:
+            assert json.loads(result.stdout) == {"status": "ok"}
+    else:
+        assert "validation stdout" in result.stdout
+        assert "$ " in result.stdout
+        assert '"status"' not in result.stdout
 
 
 def test_scan_reports_noop_and_changes(tmp_path: Path) -> None:
