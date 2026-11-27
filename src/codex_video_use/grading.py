@@ -22,6 +22,13 @@ def resolve_filter(name_or_filter: str | None) -> str:
 
 
 def apply_grade(input_path: Path, output_path: Path, *, filter_string: str) -> Path:
+    source = input_path.resolve()
+    destination = output_path.resolve()
+    if destination == source or (
+        destination.exists() and source.exists() and destination.samefile(source)
+    ):
+        raise SystemExit("grading output must be different from the input media")
+
     vf = resolve_filter(filter_string)
     command = [
         "ffmpeg",
@@ -43,7 +50,6 @@ def apply_grade(input_path: Path, output_path: Path, *, filter_string: str) -> P
         "-c:a",
         "copy",
     ]
-    destination = output_path.resolve()
     with tempfile.TemporaryDirectory(
         prefix=f".{destination.stem}-grade-", dir=destination.parent
     ) as temporary_dir:
