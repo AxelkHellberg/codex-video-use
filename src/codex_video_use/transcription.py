@@ -67,6 +67,23 @@ def transcript_is_current(output_path: Path, source: Path, *, audio_track: int =
         return False
     if not isinstance(data, dict):
         return False
+    words = data.get("words")
+    if not isinstance(words, list):
+        return False
+    for word in words:
+        if not isinstance(word, dict) or not isinstance(word.get("text"), str):
+            return False
+        start, end = word.get("start"), word.get("end")
+        try:
+            valid = all(
+                isinstance(value, (int, float)) and not isinstance(value, bool)
+                and math.isfinite(value) and value >= 0
+                for value in (start, end)
+            ) and end >= start
+        except OverflowError:
+            valid = False
+        if not valid:
+            return False
     cached_track = data.get("source_audio_track", 0)
     if isinstance(cached_track, bool) or not isinstance(cached_track, (int, str)):
         return False

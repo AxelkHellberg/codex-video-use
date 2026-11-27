@@ -22,7 +22,7 @@ def test_invalid_track_metadata_is_a_miss(tmp_path, track):
     source.write_bytes(b"media")
     cache = tmp_path / "source.json"
     cache.write_text(json.dumps({"source_path": str(source.resolve()), "source_size": source.stat().st_size,
-        "source_mtime_ns": source.stat().st_mtime_ns, "source_audio_track": track}))
+        "source_mtime_ns": source.stat().st_mtime_ns, "source_audio_track": track, "words": []}))
     assert transcript_is_current(cache, source, audio_track=1) is False
 
 
@@ -39,7 +39,7 @@ def test_valid_or_legacy_default_cache_is_reused(tmp_path, track):
     source = tmp_path / "source.mp4"
     source.write_bytes(b"media")
     payload = {"source_path": str(source.resolve()), "source_size": source.stat().st_size,
-        "source_mtime_ns": source.stat().st_mtime_ns}
+        "source_mtime_ns": source.stat().st_mtime_ns, "words": []}
     if track is not None:
         payload["source_audio_track"] = track
     cache = tmp_path / "source.json"
