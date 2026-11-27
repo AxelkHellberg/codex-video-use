@@ -127,6 +127,16 @@ Build a decision image:
 codex-video-use-timeline-view /path/to/my-footage/clip.mp4 12.0 18.0 -o /path/to/my-footage/edit/verify/cut-01.png
 ```
 
+Grade a clip:
+
+```bash
+codex-video-use-grade /path/to/my-footage/clip.mp4 -o /path/to/my-footage/clip.graded.mp4
+```
+
+The grading output must refer to a different file from the input, including
+symbolic and hard links. Existing separate exports are replaced only after
+encoding succeeds.
+
 Render from an EDL:
 
 ```bash
