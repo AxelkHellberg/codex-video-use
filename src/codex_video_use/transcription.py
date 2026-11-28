@@ -67,6 +67,17 @@ def transcript_is_current(output_path: Path, source: Path, *, audio_track: int =
         return False
     if not isinstance(data, dict):
         return False
+    if "duration_seconds" in data:
+        duration = data["duration_seconds"]
+        try:
+            valid_duration = (
+                isinstance(duration, (int, float)) and not isinstance(duration, bool)
+                and math.isfinite(duration) and duration >= 0
+            )
+        except OverflowError:
+            valid_duration = False
+        if not valid_duration:
+            return False
     words = data.get("words")
     if not isinstance(words, list):
         return False
